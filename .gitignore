@@ -2,3 +2,4 @@
 node_modules/
 
 deno-kv.db
+.env

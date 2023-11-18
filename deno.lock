@@ -218,6 +218,8 @@
     "https://deno.land/std@0.206.0/uuid/v1.ts": "fe36009afce7ced96e1b5928565e12c5a8eb0df1a2b5063c0a72bda6b75c0de5",
     "https://deno.land/std@0.206.0/uuid/v3.ts": "49bd2a5cd19f043c88777a8daeaa453f96cc586129af78863aa34dadf27d5fd0",
     "https://deno.land/std@0.206.0/uuid/v4.ts": "0f081880c156fd59b9e44e2f84ea0f94a3627e89c224eaf6cc982b53d849f37e",
-    "https://deno.land/std@0.206.0/uuid/v5.ts": "a102f716fc8d31b7e7e4376b1e7d6a255c39858bda6e5f672a4bb3cbd67405d0"
+    "https://deno.land/std@0.206.0/uuid/v5.ts": "a102f716fc8d31b7e7e4376b1e7d6a255c39858bda6e5f672a4bb3cbd67405d0",
+    "https://deno.land/std@0.207.0/dotenv/load.ts": "0636983549b98f29ab75c9a22a42d9723f0a389ece5498fe971e7bb2556a12e2",
+    "https://deno.land/std@0.207.0/dotenv/mod.ts": "039468f5c87d39b69d7ca6c3d68ebca82f206ec0ff5e011d48205eea292ea5a6"
   }
 }

@@ -59,36 +59,56 @@ export interface Tap {
 
 export interface TapWithPub extends Tap {
   pub: Pub;
+  halfLiterPrice: number | null;
+  halfLiterAlcoholWeight: number | null;
+
+  /*
+   * "6% - 0.95 - 25zl",
+   * "6% - 1.18 - 20zl",
+   */
+  alcoholToPriceRatio: number | null;
+}
+
+export interface BeerWithTaps extends Beer {
+  taps: TapWithPub[];
 }
 
 export interface BeersFilters {
   cityName: string;
-  cityId?: string;
-  styleRegex?: string;
+  limitBeers: number;
+
+  lowerCaseStyleRegex?: string;
   pubName?: string;
   pubId?: string;
   priceFrom?: number;
   priceTo?: number;
-  volume?: number;
 }
 
-export type BeerExtended = Beer & {
-  pubs: Pub[];
-  taps: Tap[];
-}
+export type BeerFilterResultSortBy =
+  | "priceAsc"
+  | "priceDesc"
+  | "ratingAsc"
+  | "ratingDesc"
+  | "alcoholToPriceRatioAsc"
+  | "alcoholToPriceRatioDesc";
 
 export interface BeerFilterResult {
   beerName: string;
   beerStyle: string;
   /**
    * should be used as reference for getting beer details
-   * */
+   */
   beerId: string;
   /**
    * should be used as reference for getting pub details
-   * */
+   */
   pubs: Array<{
     pubId: PubId;
     pubName: string;
-  }>
+  }>;
+}
+
+export interface BeerFilterResult2 {
+  beers: BeerWithTaps[];
+  total: number;
 }
