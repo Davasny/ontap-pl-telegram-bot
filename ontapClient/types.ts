@@ -69,6 +69,10 @@ export interface TapWithPub extends Tap {
   alcoholToPriceRatio: number | null;
 }
 
+export interface PubWithTaps extends Pub {
+  taps: Tap[];
+}
+
 export interface BeerWithTaps extends Beer {
   taps: TapWithPub[];
 }

@@ -9,6 +9,7 @@ import {
   BeerWithTaps,
   City,
   Pub,
+  PubWithTaps,
   Tap,
   TapWithPub,
 } from "./types";
@@ -62,7 +63,10 @@ export class Repository {
     return pubs.map((pub) => pub.name);
   }
 
-  public async getPubDetails(cityName: string, pubName: string): Promise<Pub> {
+  public async getPubDetails(
+    cityName: string,
+    pubName: string,
+  ): Promise<PubWithTaps> {
     const pub = await this.getPubsInCityFull(cityName).then((pubs) =>
       pubs.find((pub) => pub.name === pubName),
     );
@@ -71,7 +75,12 @@ export class Repository {
       throw new Error(`Pub "${pubName}" not found`);
     }
 
-    return pub;
+    const taps = await this.getTapsInPub(pub.id);
+
+    return {
+      ...pub,
+      taps,
+    };
   }
 
   public async getPubByName(cityName: string, pubName: string): Promise<Pub> {
@@ -167,10 +176,10 @@ export class Repository {
     const pub = await this.getPubByName(cityName, pubName);
     const urlParams = new URLSearchParams({
       api: "1",
-      destination: `${pub.lat},${pub.lon}`,
+      query: `${pub.lat},${pub.lon}`,
     });
 
-    return `https://www.google.com/maps/dir/?${urlParams.toString()}`;
+    return `https://www.google.com/maps/search/?${urlParams.toString()}`;
   };
 
   public getBeers = async (
@@ -188,7 +197,13 @@ export class Repository {
 
     const beersInCityMap = new Map<BeerId, BeerWithTaps>();
 
-    for (const pubWithTaps of pubsWithTapsInCity) {
+    const filteredPubsByName = pubsWithTapsInCity.filter(
+      (pub) =>
+        !filter.pubNameRegex ||
+        new RegExp(filter.pubNameRegex).test(pub.pub.name.toLowerCase()),
+    );
+
+    for (const pubWithTaps of filteredPubsByName) {
       for (const tap of pubWithTaps.taps) {
         const halfLiterPrice = Repository.getHalfLiterPrice(tap);
         const halfLiterAlcoholWeight = Repository.getAlcoholWeight(tap);
@@ -229,14 +244,6 @@ export class Repository {
         ? new RegExp(filter.lowerCaseStyleRegex).test(beer.style.toLowerCase())
         : false);
 
-    const filterByPubNameRegex = (beer: BeerWithTaps): boolean =>
-      !filter.pubNameRegex ||
-      beer.taps.some((tap) =>
-        tap.pub.name && filter.pubNameRegex
-          ? new RegExp(filter.pubNameRegex).test(tap.pub.name.toLowerCase())
-          : false,
-      );
-
     const filterByLowerPrice = (beer: BeerWithTaps): boolean =>
       !filter.priceFrom ||
       (filter.priceFrom
@@ -272,7 +279,6 @@ export class Repository {
 
     const filteredBeers = beers
       .filter(filterByStyleRegex)
-      .filter(filterByPubNameRegex)
       .filter(filterByLowerPrice)
       .filter(filterByHigherPrice)
       .filter(filterByLowerAbv)
