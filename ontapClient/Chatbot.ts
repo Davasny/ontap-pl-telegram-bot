@@ -4,6 +4,8 @@ import * as console from "console";
 import Keyv from "keyv";
 import * as process from "process";
 import { BeersFilters } from "./types";
+import { AssistantCreateParams } from "openai/src/resources/beta/assistants/assistants";
+import { createHash } from "crypto";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -19,11 +21,14 @@ const MODEL = {
   m4: "gpt-4-1106-preview",
 };
 
-async function main() {
-  const assistant = await client.beta.assistants.create({
-    name: "Ontap Assistant",
-    model: MODEL.m4,
-    instructions: `
+const generateHash = (input: string): string => {
+  return createHash("sha256").update(input).digest("hex");
+};
+
+const assistantBody: AssistantCreateParams = {
+  name: "Ontap Assistant",
+  model: MODEL.m4,
+  instructions: `
 Jesteś asystentem znającym dostępne puby i piwa w mieście.
 Zawsze pytaj o miasto, które interesuje użytkownika.
 Nie wolno ci odpowiedzieć na pytanie, jeśli nie znasz miasta. 
@@ -37,113 +42,139 @@ Zawsze używaj polskich znaków i polskich nazw miast.
 W przypadku pytania o drogę, odeślij link do google maps.
 Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
 `,
-    tools: [
-      {
-        type: "function",
-        function: {
-          name: "getCitiesNames",
-          parameters: {
-            type: "object",
-            properties: {},
-          },
-          description: "List known cities",
+  tools: [
+    {
+      type: "function",
+      function: {
+        name: "getCitiesNames",
+        parameters: {
+          type: "object",
+          properties: {},
         },
+        description: "List known cities",
       },
-      {
-        type: "function",
-        function: {
-          name: "getPubsInCity",
-          description: "List available pubs in city",
-          parameters: {
-            type: "object",
-            properties: {
-              cityName: {
-                type: "string",
-                description: "Name of the city",
-              },
+    },
+    {
+      type: "function",
+      function: {
+        name: "getPubsInCity",
+        description: "List available pubs in city",
+        parameters: {
+          type: "object",
+          properties: {
+            cityName: {
+              type: "string",
+              description: "Name of the city",
             },
           },
         },
       },
-      {
-        type: "function",
-        function: {
-          name: "getPubDetails",
-          description: "Get details about pub",
-          parameters: {
-            type: "object",
-            properties: {
-              cityName: {
-                type: "string",
-                description: "Name of the city",
-              },
-              pubName: {
-                type: "string",
-                description: "Name of the pub",
-              },
+    },
+    {
+      type: "function",
+      function: {
+        name: "getPubDetails",
+        description: "Get details about pub",
+        parameters: {
+          type: "object",
+          properties: {
+            cityName: {
+              type: "string",
+              description: "Name of the city",
+            },
+            pubName: {
+              type: "string",
+              description: "Name of the pub",
             },
           },
         },
       },
-      {
-        type: "function",
-        function: {
-          name: "getGoogleMapsUrl",
-          description: "Get google maps url for pub",
-          parameters: {
-            type: "object",
-            properties: {
-              cityName: {
-                type: "string",
-                description: "Name of the city",
-              },
-              pubName: {
-                type: "string",
-                description: "Name of the pub",
-              },
+    },
+    {
+      type: "function",
+      function: {
+        name: "getGoogleMapsUrl",
+        description: "Get google maps url for pub",
+        parameters: {
+          type: "object",
+          properties: {
+            cityName: {
+              type: "string",
+              description: "Name of the city",
+            },
+            pubName: {
+              type: "string",
+              description: "Name of the pub",
             },
           },
         },
       },
-      {
-        type: "function",
-        function: {
-          name: "getBeers",
-          description: "Get beers available in city using filters",
-          parameters: {
-            type: "object",
-            properties: {
-              cityName: {
-                type: "string",
-                description: "Name of the city",
-              },
-              limitBeers: {
-                type: "number",
-                description: "Limit returned beers",
-              },
-              lowerCaseStyleRegex: {
-                type: "string",
-                description: "lowercase written regex for matching beer style",
-              },
-              priceFrom: {
-                type: "number",
-                description: "Price from in PLN",
-              },
-              priceTo: {
-                type: "number",
-                description: "Price to in PLN",
-              },
-              pubName: {
-                type: "string",
-                description: "Name of the pub",
-              },
+    },
+    {
+      type: "function",
+      function: {
+        name: "getBeers",
+        description: "Get beers available in city using filters",
+        parameters: {
+          type: "object",
+          properties: {
+            cityName: {
+              type: "string",
+              description: "Name of the city",
             },
-            required: ["cityName", "limitBeers"],
+            limitBeers: {
+              type: "number",
+              description: "Limit returned beers",
+            },
+            lowerCaseStyleRegex: {
+              type: "string",
+              description: "lowercase written regex for matching beer style",
+            },
+            priceFrom: {
+              type: "number",
+              description: "Price from in PLN",
+            },
+            priceTo: {
+              type: "number",
+              description: "Price to in PLN",
+            },
+            pubName: {
+              type: "string",
+              description: "Name of the pub",
+            },
           },
+          required: ["cityName", "limitBeers"],
         },
       },
-    ],
-  });
+    },
+  ],
+};
+
+async function main() {
+  const assistantVersion = generateHash(JSON.stringify(assistantBody));
+
+  let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
+
+  await client.beta.assistants.retrieve(assistantId).catch(async (e) => {
+    console.log("Assistant not found, deleting from kv and creating new one");
+
+    await keyv.delete(`assistantId-${assistantVersion}`);
+    assistantId = undefined;
+  })
+
+  if (!assistantId) {
+    console.log("Creating new assistant, config hash:", assistantVersion);
+
+    const date = new Date();
+
+    const assistant = await client.beta.assistants.create({
+      ...assistantBody,
+      name: `${assistantBody.name} - ${date.toISOString()} - ${assistantVersion}`,
+    });
+
+    assistantId = assistant.id;
+    await keyv.set(`assistantId-${assistantVersion}`, assistantId);
+  }
 
   let threadId = await keyv.get(`threadId-${userId}`);
   if (!threadId) {
@@ -158,10 +189,10 @@ Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
   });
 
   let run = await client.beta.threads.runs.create(threadId, {
-    assistant_id: assistant.id,
+    assistant_id: assistantId,
   });
 
-  console.log(run.status);
+  console.log("[CB] run status:", run.status);
 
   await new Promise<void>((resolve) => {
     // todo: add timeout
@@ -169,7 +200,7 @@ Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
 
     const intervalId = setInterval(async () => {
       run = await client.beta.threads.runs.retrieve(threadId, run.id);
-      console.log(run.status);
+      console.log("[CB] run status:", run.status);
 
       if (run.status === "completed") {
         clearInterval(intervalId);
@@ -178,7 +209,7 @@ Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
         const toolsCalls = run.required_action?.submit_tool_outputs.tool_calls;
 
         console.log(
-          "Functions to call:",
+          "[CB] Functions to call:",
           toolsCalls?.map((call) => call.function.name),
         );
 
@@ -245,7 +276,7 @@ Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
                 toolCall.function.arguments,
               ) as BeersFilters;
 
-              console.log("getBeers args", args);
+              console.log("[CB] getBeers args:", toolCall.function.arguments);
 
               const functionResult = await repo.getBeers(args);
               return {
@@ -282,6 +313,7 @@ Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
       ? response.text.value
       : `unknown response type - ${response.type}`;
 
+  console.log("[CB] response:");
   console.log(assistantMessage);
 }
 
