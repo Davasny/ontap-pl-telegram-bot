@@ -26,7 +26,7 @@ export interface Pub {
 
 export interface Beer {
   id: BeerId;
-  abv: number | null;
+  abv: string | null;
   brewery: string;
   color: string | null;
   ibu: string | null;
@@ -78,9 +78,11 @@ export interface BeersFilters {
   limitBeers: number;
 
   lowerCaseStyleRegex?: string;
-  pubName?: string;
+  pubNameRegex?: string;
   priceFrom?: number;
   priceTo?: number;
+  abvFrom?: number;
+  abvTo?: number;
 }
 
 export type BeerFilterResultSortBy =
@@ -97,18 +99,18 @@ export interface BeerFilterResultPub {
 }
 
 export interface BeerFilterResult {
-  beerName: string;
-  beerStyle: string | null;
+  beerName: Beer["name"];
+  beerStyle: Beer["style"];
   /**
    * should be used as reference for getting beer details
    */
-  beerId: string;
+  beerId: BeerId;
   /**
    * should be used as reference for getting pub details
    */
   pubs: BeerFilterResultPub[];
 
-  abv: number | null;
+  abv: Beer["abv"];
 }
 
 export interface BeerFilterResult2 {

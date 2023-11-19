@@ -11,10 +11,6 @@ import {
   RunSubmitToolOutputsParams,
 } from "openai/src/resources/beta/threads/runs/runs";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const repo = Repository.getInstance();
 const keyv = new Keyv("sqlite://./db.sqlite");
 
@@ -136,9 +132,17 @@ Gdy opisujesz dostępne piwa, napisz tylko % alkoholu (ze znakiem %) bez "ABV"
               type: "number",
               description: "Price to in PLN",
             },
-            pubName: {
+            abvFrom: {
+              type: "number",
+              description: "Alcohol abv from in %",
+            },
+            abvTo: {
+              type: "number",
+              description: "Alcohol abv to in %",
+            },
+            pubNameRegex: {
               type: "string",
-              description: "Name of the pub",
+              description: "lowercase written regex for matching pub name",
             },
           },
           required: ["cityName", "limitBeers"],
@@ -163,7 +167,9 @@ export class Chatbot {
   private async getThreadId(): Promise<string> {
     let threadId = await keyv.get(`threadId-${this.userId}`);
     if (!threadId) {
-      threadId = await client.beta.threads.create().then((thread) => thread.id);
+      threadId = await this.openai.beta.threads
+        .create()
+        .then((thread) => thread.id);
       await keyv.set(`threadId-${this.userId}`, threadId);
       console.log(`Created new thread ${threadId} for user ${this.userId}`);
     }
@@ -176,7 +182,7 @@ export class Chatbot {
 
     let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
 
-    await client.beta.assistants.retrieve(assistantId).catch(async (e) => {
+    await this.openai.beta.assistants.retrieve(assistantId).catch(async (e) => {
       console.log("Assistant not found, deleting from kv and creating new one");
 
       await keyv.delete(`assistantId-${assistantVersion}`);
@@ -188,7 +194,7 @@ export class Chatbot {
 
       const date = new Date();
 
-      const assistant = await client.beta.assistants.create({
+      const assistant = await this.openai.beta.assistants.create({
         ...assistantBody,
         name: `${
           assistantBody.name
@@ -276,12 +282,12 @@ export class Chatbot {
     const threadId = await this.getThreadId();
     const assistantId = await this.getAssistantId();
 
-    await client.beta.threads.messages.create(threadId, {
+    await this.openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
     });
 
-    let run = await client.beta.threads.runs.create(threadId, {
+    let run = await this.openai.beta.threads.runs.create(threadId, {
       assistant_id: assistantId,
     });
 
@@ -292,7 +298,7 @@ export class Chatbot {
       // todo: handle other statuses
 
       const intervalId = setInterval(async () => {
-        run = await client.beta.threads.runs.retrieve(threadId, run.id);
+        run = await this.openai.beta.threads.runs.retrieve(threadId, run.id);
         console.log("[CB] run status:", run.status);
 
         if (run.status === "completed") {
@@ -321,9 +327,13 @@ export class Chatbot {
           );
 
           try {
-            await client.beta.threads.runs.submitToolOutputs(threadId, run.id, {
-              tool_outputs: toolOutputsPayload,
-            });
+            await this.openai.beta.threads.runs.submitToolOutputs(
+              threadId,
+              run.id,
+              {
+                tool_outputs: toolOutputsPayload,
+              },
+            );
           } catch (e) {
             console.log(e);
           }
@@ -331,7 +341,7 @@ export class Chatbot {
       }, 500);
     });
 
-    const messages = await client.beta.threads.messages.list(threadId, {
+    const messages = await this.openai.beta.threads.messages.list(threadId, {
       limit: 1,
     });
 

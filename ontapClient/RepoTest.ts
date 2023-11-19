@@ -5,8 +5,10 @@ const main = async () => {
   const beers = await repo.getBeers({
     cityName: "Kraków",
     limitBeers: 5,
-    lowerCaseStyleRegex: "sour",
-    priceTo: 20
+    // lowerCaseStyleRegex: "sour",
+    // priceTo: 20,
+    abvTo: 10,
+    abvFrom: 8
   })
 
   console.dir(beers, { depth: null});

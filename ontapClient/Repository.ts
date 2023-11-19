@@ -120,7 +120,7 @@ export class Repository {
   private static getHalfLiterPrice = (tap: Tap): number | null => {
     const halfLiterVariant = tap.variants.find((v) => v.volume === "0.5l");
     if (halfLiterVariant) {
-      return halfLiterVariant.price / 100;
+      return Math.round(halfLiterVariant.price / 100);
     }
 
     // if there is no 0.5l variant, try to calculate it from other variants
@@ -132,19 +132,32 @@ export class Repository {
       );
       const price = tap.variants[0].price / 100;
       // normalize price to 0.5l
-      return (0.5 * price) / volumeNumber;
+      return Math.round((0.5 * price) / volumeNumber);
     }
 
     return null;
   };
 
-  private static getAlcoholWeight = (tap: Tap): number | null => {
-    const abv = tap.beer?.abv;
+  private static parseAbv = (abv: string | null | undefined): number | null => {
     if (!abv) {
       return null;
     }
 
-    return (abv / 100) * 500 * ALCOHOL_DESTINY_G_ML;
+    const abvNumber = parseFloat(abv.replace(",", ".").replace("%", ""));
+    if (isNaN(abvNumber)) {
+      return null;
+    }
+
+    return abvNumber;
+  };
+
+  private static getAlcoholWeight = (tap: Tap): number | null => {
+    const abv = this.parseAbv(tap.beer?.abv);
+    if (!abv) {
+      return null;
+    }
+
+    return Math.round((abv / 100) * 500 * ALCOHOL_DESTINY_G_ML);
   };
 
   public getGoogleMapsUrl = async (
@@ -216,9 +229,13 @@ export class Repository {
         ? new RegExp(filter.lowerCaseStyleRegex).test(beer.style.toLowerCase())
         : false);
 
-    const filterByPubName = (beer: BeerWithTaps): boolean =>
-      !filter.pubName ||
-      beer.taps.some((tap) => tap.pub.name === filter.pubName);
+    const filterByPubNameRegex = (beer: BeerWithTaps): boolean =>
+      !filter.pubNameRegex ||
+      beer.taps.some((tap) =>
+        tap.pub.name && filter.pubNameRegex
+          ? new RegExp(filter.pubNameRegex).test(tap.pub.name.toLowerCase())
+          : false,
+      );
 
     const filterByLowerPrice = (beer: BeerWithTaps): boolean =>
       !filter.priceFrom ||
@@ -241,11 +258,25 @@ export class Repository {
           )
         : false);
 
+    const filterByLowerAbv = (beer: BeerWithTaps): boolean =>
+      !filter.abvFrom ||
+      (beer.abv && filter.abvFrom
+        ? parseFloat(beer.abv) >= (filter.abvFrom ? filter.abvFrom : 9999)
+        : false);
+
+    const filterByHigherAbv = (beer: BeerWithTaps): boolean =>
+      !filter.abvTo ||
+      (beer.abv && filter.abvTo
+        ? parseFloat(beer.abv) <= (filter.abvTo ? filter.abvTo : 0)
+        : false);
+
     const filteredBeers = beers
       .filter(filterByStyleRegex)
-      .filter(filterByPubName)
+      .filter(filterByPubNameRegex)
       .filter(filterByLowerPrice)
-      .filter(filterByHigherPrice);
+      .filter(filterByHigherPrice)
+      .filter(filterByLowerAbv)
+      .filter(filterByHigherAbv);
 
     const simplifiedBeers: BeerFilterResult[] = filteredBeers.map((beer) => {
       const pubsNames: BeerFilterResultPub[] = beer.taps.map((tap) => ({

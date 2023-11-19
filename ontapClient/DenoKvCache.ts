@@ -1,9 +1,9 @@
 import { KV_CACHE_EXPIRE_MS } from "./consts.ts";
-import { CacheManager } from "./CacheManager.ts";
+import { Cache } from "./CacheManager.ts";
 
 export const kv = await Deno.openKv("./deno-kv.db");
 
-export class KvCache implements CacheManager {
+export class KvCache implements Cache {
   public get = async <T>(key: string): Promise<T | undefined> => {
     console.log("[KV] get", key);
     const value = await kv.get([key]);
