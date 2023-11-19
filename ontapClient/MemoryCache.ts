@@ -1,6 +1,6 @@
-import { Cache } from "./Cache";
+import { ICache } from "./CacheManager";
 
-export class MemoryCache implements Cache {
+export class MemoryCache implements ICache {
   private cache: Map<string, any> = new Map();
 
   static serializeKey = (key: string[]): string => key.join("-");

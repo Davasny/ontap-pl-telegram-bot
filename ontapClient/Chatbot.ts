@@ -5,24 +5,22 @@ import Keyv from "keyv";
 import * as process from "process";
 import { BeersFilters } from "./types";
 import { AssistantCreateParams } from "openai/src/resources/beta/assistants/assistants";
-import { createHash } from "crypto";
+import { generateHash } from "./utils";
+import {
+  RequiredActionFunctionToolCall,
+  RunSubmitToolOutputsParams,
+} from "openai/src/resources/beta/threads/runs/runs";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const repo = new Repository();
+const repo = Repository.getInstance();
 const keyv = new Keyv("sqlite://./db.sqlite");
-
-const userId = "user_25";
 
 const MODEL = {
   m3: "gpt-3.5-turbo-1106",
   m4: "gpt-4-1106-preview",
-};
-
-const generateHash = (input: string): string => {
-  return createHash("sha256").update(input).digest("hex");
 };
 
 const assistantBody: AssistantCreateParams = {
@@ -40,7 +38,7 @@ Nie wolno robić ci założeń, jeśli brakuje Ci informacji, spytaj użytkownik
 Listy elementów pisz po przecinku, a nie od nowych linii.
 Zawsze używaj polskich znaków i polskich nazw miast.
 W przypadku pytania o drogę, odeślij link do google maps.
-Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
+Gdy opisujesz dostępne piwa, napisz tylko % alkoholu (ze znakiem %) bez "ABV"
 `,
   tools: [
     {
@@ -150,171 +148,202 @@ Gdy opisujesz dostępne piwa, napisz tylko % alkoholu bez "ABV"
   ],
 };
 
-async function main() {
-  const assistantVersion = generateHash(JSON.stringify(assistantBody));
+export class Chatbot {
+  private openai: OpenAI;
+  private userId: string;
 
-  let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
-
-  await client.beta.assistants.retrieve(assistantId).catch(async (e) => {
-    console.log("Assistant not found, deleting from kv and creating new one");
-
-    await keyv.delete(`assistantId-${assistantVersion}`);
-    assistantId = undefined;
-  })
-
-  if (!assistantId) {
-    console.log("Creating new assistant, config hash:", assistantVersion);
-
-    const date = new Date();
-
-    const assistant = await client.beta.assistants.create({
-      ...assistantBody,
-      name: `${assistantBody.name} - ${date.toISOString()} - ${assistantVersion}`,
+  constructor(userId: string) {
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
     });
 
-    assistantId = assistant.id;
-    await keyv.set(`assistantId-${assistantVersion}`, assistantId);
+    this.userId = userId;
   }
 
-  let threadId = await keyv.get(`threadId-${userId}`);
-  if (!threadId) {
-    threadId = await client.beta.threads.create().then((thread) => thread.id);
-    await keyv.set(`threadId-${userId}`, threadId);
-    console.log(`Created new thread ${threadId} for user ${userId}`);
+  private async getThreadId(): Promise<string> {
+    let threadId = await keyv.get(`threadId-${this.userId}`);
+    if (!threadId) {
+      threadId = await client.beta.threads.create().then((thread) => thread.id);
+      await keyv.set(`threadId-${this.userId}`, threadId);
+      console.log(`Created new thread ${threadId} for user ${this.userId}`);
+    }
+
+    return threadId;
   }
 
-  await client.beta.threads.messages.create(threadId, {
-    role: "user",
-    content: "w krakowie",
-  });
+  private async getAssistantId(): Promise<string> {
+    const assistantVersion = generateHash(JSON.stringify(assistantBody));
 
-  let run = await client.beta.threads.runs.create(threadId, {
-    assistant_id: assistantId,
-  });
+    let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
 
-  console.log("[CB] run status:", run.status);
+    await client.beta.assistants.retrieve(assistantId).catch(async (e) => {
+      console.log("Assistant not found, deleting from kv and creating new one");
 
-  await new Promise<void>((resolve) => {
-    // todo: add timeout
-    // todo: handle other statuses
+      await keyv.delete(`assistantId-${assistantVersion}`);
+      assistantId = undefined;
+    });
 
-    const intervalId = setInterval(async () => {
-      run = await client.beta.threads.runs.retrieve(threadId, run.id);
-      console.log("[CB] run status:", run.status);
+    if (!assistantId) {
+      console.log("Creating new assistant, config hash:", assistantVersion);
 
-      if (run.status === "completed") {
-        clearInterval(intervalId);
-        resolve();
-      } else if (run.status === "requires_action") {
-        const toolsCalls = run.required_action?.submit_tool_outputs.tool_calls;
+      const date = new Date();
 
-        console.log(
-          "[CB] Functions to call:",
-          toolsCalls?.map((call) => call.function.name),
-        );
+      const assistant = await client.beta.assistants.create({
+        ...assistantBody,
+        name: `${
+          assistantBody.name
+        } - ${date.toISOString()} - ${assistantVersion}`,
+      });
 
-        if (!toolsCalls) {
-          throw new Error("No tool calls in status requires_action");
+      assistantId = assistant.id;
+      await keyv.set(`assistantId-${assistantVersion}`, assistantId);
+    }
+
+    return assistantId;
+  }
+
+  private handleFunctionCall = async (
+    toolCall: RequiredActionFunctionToolCall,
+  ): Promise<RunSubmitToolOutputsParams.ToolOutput> => {
+    if (toolCall.function.name === "getCitiesNames") {
+      const functionResult = await repo.getCitiesNames();
+      return {
+        tool_call_id: toolCall.id,
+        output: functionResult.join(", "),
+      };
+    }
+
+    if (toolCall.function.name === "getPubsInCity") {
+      const args = JSON.parse(toolCall.function.arguments) as {
+        cityName: string;
+      };
+
+      const functionResult = await repo.getPubsInCity(args.cityName);
+      return {
+        tool_call_id: toolCall.id,
+        output: functionResult.join(", "),
+      };
+    }
+
+    if (toolCall.function.name === "getPubDetails") {
+      const args = JSON.parse(toolCall.function.arguments) as {
+        cityName: string;
+        pubName: string;
+      };
+
+      const functionResult = await repo.getPubDetails(
+        args.cityName,
+        args.pubName,
+      );
+      return {
+        tool_call_id: toolCall.id,
+        output: JSON.stringify(functionResult),
+      };
+    }
+
+    if (toolCall.function.name === "getGoogleMapsUrl") {
+      const args = JSON.parse(toolCall.function.arguments) as {
+        cityName: string;
+        pubName: string;
+      };
+
+      const functionResult = await repo.getGoogleMapsUrl(
+        args.cityName,
+        args.pubName,
+      );
+      return {
+        tool_call_id: toolCall.id,
+        output: functionResult,
+      };
+    }
+
+    if (toolCall.function.name === "getBeers") {
+      const args = JSON.parse(toolCall.function.arguments) as BeersFilters;
+
+      console.log("[CB] getBeers args:", toolCall.function.arguments);
+
+      const functionResult = await repo.getBeers(args);
+      return {
+        tool_call_id: toolCall.id,
+        output: JSON.stringify(functionResult),
+      };
+    }
+
+    throw new Error(`Unknown function ${toolCall.function.name}`);
+  };
+
+  public async processMessage(message: string): Promise<string> {
+    const threadId = await this.getThreadId();
+    const assistantId = await this.getAssistantId();
+
+    await client.beta.threads.messages.create(threadId, {
+      role: "user",
+      content: message,
+    });
+
+    let run = await client.beta.threads.runs.create(threadId, {
+      assistant_id: assistantId,
+    });
+
+    console.log("[CB] run status:", run.status);
+
+    await new Promise<void>((resolve) => {
+      // todo: add timeout
+      // todo: handle other statuses
+
+      const intervalId = setInterval(async () => {
+        run = await client.beta.threads.runs.retrieve(threadId, run.id);
+        console.log("[CB] run status:", run.status);
+
+        if (run.status === "completed") {
+          clearInterval(intervalId);
+          resolve();
+        } else if (run.status === "requires_action") {
+          const toolsCalls =
+            run.required_action?.submit_tool_outputs.tool_calls;
+
+          console.log(
+            "[CB] Functions to call:",
+            toolsCalls?.map((call) => call.function.name),
+          );
+
+          if (!toolsCalls) {
+            throw new Error("No tool calls in status requires_action");
+          }
+
+          const promises: Promise<RunSubmitToolOutputsParams.ToolOutput>[] =
+            toolsCalls.map(async (toolCall) =>
+              this.handleFunctionCall(toolCall),
+            );
+
+          const toolOutputsPayload = await Promise.all(promises).then(
+            (responses) => responses,
+          );
+
+          try {
+            await client.beta.threads.runs.submitToolOutputs(threadId, run.id, {
+              tool_outputs: toolOutputsPayload,
+            });
+          } catch (e) {
+            console.log(e);
+          }
         }
+      }, 500);
+    });
 
-        const promises: Promise<{ tool_call_id: string; output: string }>[] =
-          toolsCalls.map(async (toolCall) => {
-            if (toolCall.function.name === "getCitiesNames") {
-              const functionResult = await repo.getCitiesNames();
-              return {
-                tool_call_id: toolCall.id,
-                output: functionResult.join(", "),
-              };
-            }
+    const messages = await client.beta.threads.messages.list(threadId, {
+      limit: 1,
+    });
 
-            if (toolCall.function.name === "getPubsInCity") {
-              const args = JSON.parse(toolCall.function.arguments) as {
-                cityName: string;
-              };
+    const response = messages.data[0].content[0];
+    let assistantMessage =
+      response.type === "text"
+        ? response.text.value
+        : `unknown response type - ${response.type}`;
 
-              const functionResult = await repo.getPubsInCity(args.cityName);
-              return {
-                tool_call_id: toolCall.id,
-                output: functionResult.join(", "),
-              };
-            }
+    console.log("[CB] response:");
+    console.log(assistantMessage);
 
-            if (toolCall.function.name === "getPubDetails") {
-              const args = JSON.parse(toolCall.function.arguments) as {
-                cityName: string;
-                pubName: string;
-              };
-
-              const functionResult = await repo.getPubDetails(
-                args.cityName,
-                args.pubName,
-              );
-              return {
-                tool_call_id: toolCall.id,
-                output: JSON.stringify(functionResult),
-              };
-            }
-
-            if (toolCall.function.name === "getGoogleMapsUrl") {
-              const args = JSON.parse(toolCall.function.arguments) as {
-                cityName: string;
-                pubName: string;
-              };
-
-              const functionResult = await repo.getGoogleMapsUrl(
-                args.cityName,
-                args.pubName,
-              );
-              return {
-                tool_call_id: toolCall.id,
-                output: functionResult,
-              };
-            }
-
-            if (toolCall.function.name === "getBeers") {
-              const args = JSON.parse(
-                toolCall.function.arguments,
-              ) as BeersFilters;
-
-              console.log("[CB] getBeers args:", toolCall.function.arguments);
-
-              const functionResult = await repo.getBeers(args);
-              return {
-                tool_call_id: toolCall.id,
-                output: JSON.stringify(functionResult),
-              };
-            }
-
-            throw new Error(`Unknown function ${toolCall.function.name}`);
-          });
-
-        const toolOutputsPayload = await Promise.all(promises).then(
-          (responses) => responses,
-        );
-
-        try {
-          await client.beta.threads.runs.submitToolOutputs(threadId, run.id, {
-            tool_outputs: toolOutputsPayload,
-          });
-        } catch (e) {
-          console.log(e);
-        }
-      }
-    }, 500);
-  });
-
-  const messages = await client.beta.threads.messages.list(threadId, {
-    limit: 1,
-  });
-
-  const response = messages.data[0].content[0];
-  let assistantMessage =
-    response.type === "text"
-      ? response.text.value
-      : `unknown response type - ${response.type}`;
-
-  console.log("[CB] response:");
-  console.log(assistantMessage);
+    return assistantMessage;
+  }
 }
-
-main();

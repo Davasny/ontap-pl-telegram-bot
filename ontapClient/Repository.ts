@@ -12,16 +12,26 @@ import {
   Tap,
   TapWithPub,
 } from "./types";
-import { CacheManager } from "./Cache";
+import { CacheManager } from "./CacheManager";
 import { ALCOHOL_DESTINY_G_ML } from "./consts";
 
 export class Repository {
+  private static instance: Repository;
+
   private apiClient: ApiClient;
   private cacheManager: CacheManager;
 
   constructor() {
     this.apiClient = new ApiClient();
     this.cacheManager = CacheManager.getInstance();
+  }
+
+  public static getInstance(): Repository {
+    if (!Repository.instance) {
+      Repository.instance = new Repository();
+    }
+
+    return Repository.instance;
   }
 
   public async getCities(): Promise<City[]> {

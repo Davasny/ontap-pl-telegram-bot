@@ -1,7 +1,7 @@
 import { MemoryCache } from "./MemoryCache";
 import { KeyvCache } from "./KeyvCache";
 
-export interface Cache {
+export interface ICache {
   get<T>(key: string): Promise<T | undefined>;
 
   set<T>(key: string, value: T): Promise<void>;
@@ -12,10 +12,10 @@ export interface Cache {
 export class CacheManager {
   private static instance: CacheManager;
 
-  private readonly caches: Cache[];
+  private readonly caches: ICache[];
   private synchronizeCache: boolean;
 
-  constructor(caches: Cache[], synchronizeCache = true) {
+  constructor(caches: ICache[], synchronizeCache = true) {
     this.caches = caches;
     this.synchronizeCache = synchronizeCache;
   }
@@ -32,7 +32,7 @@ export class CacheManager {
   }
 
   public get = async <T>(key: string): Promise<T | undefined> => {
-    const cachesToSync: Cache[] = [];
+    const cachesToSync: ICache[] = [];
 
     let value: T | undefined = undefined;
     for (const cache of this.caches) {

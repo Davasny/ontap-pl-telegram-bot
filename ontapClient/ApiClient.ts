@@ -1,4 +1,4 @@
-import { CacheManager } from "./Cache";
+import { CacheManager } from "./CacheManager";
 import { API_KEY } from "./consts";
 import wretch, { Wretch } from "wretch";
 

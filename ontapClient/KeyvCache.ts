@@ -1,9 +1,9 @@
-import { Cache } from "./Cache";
 import Keyv from "keyv";
+import { ICache } from "./CacheManager";
 
 const keyv = new Keyv("sqlite://./api-cache.sqlite");
 
-export class KeyvCache implements Cache {
+export class KeyvCache implements ICache {
   public get = async <T>(key: string): Promise<T | undefined> => {
     console.log("[KV] get", key);
     const value = await keyv.get(key);

@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "run": "tsx ontapClient/Chatbot.ts",
+    "run": "tsx ontapClient/index.ts",
     "test": "tsx ontapClient/RepoTest.ts"
   },
   "keywords": [],
