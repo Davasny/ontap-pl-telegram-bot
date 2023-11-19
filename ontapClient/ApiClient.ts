@@ -1,8 +1,6 @@
-import wretch, { Wretch } from "npm:wretch@2.7.0";
-
-import { CacheManager } from "./Cache.ts";
-import { API_KEY } from "./consts.ts";
-import { v1 } from "https://deno.land/std@0.206.0/uuid/mod.ts";
+import { CacheManager } from "./Cache";
+import { API_KEY } from "./consts";
+import wretch, { Wretch } from "wretch";
 
 export class ApiClient {
   private apiClient: Wretch;
@@ -11,7 +9,6 @@ export class ApiClient {
   constructor() {
     this.apiClient = wretch("https://ontap.pl/api/v1").headers({
       "api-key": API_KEY,
-      "device-id": v1.generate().toString(),
     });
 
     this.cacheManager = CacheManager.getInstance();
@@ -24,6 +21,7 @@ export class ApiClient {
       return cachedValue;
     }
 
+    console.log("[AC] fetch", url);
     const apiResponse = await this.apiClient.url(url).get().json<T>();
 
     await this.cacheManager.set<T>(url, apiResponse);

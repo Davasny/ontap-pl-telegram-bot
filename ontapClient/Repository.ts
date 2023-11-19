@@ -1,7 +1,9 @@
-import { ApiClient } from "./ApiClient.ts";
+import { ApiClient } from "./ApiClient";
 import {
   Beer,
+  BeerFilterResult,
   BeerFilterResult2,
+  BeerFilterResultPub,
   BeerId,
   BeersFilters,
   BeerWithTaps,
@@ -9,9 +11,9 @@ import {
   Pub,
   Tap,
   TapWithPub,
-} from "./types.ts";
-import { CacheManager } from "./Cache.ts";
-import { ALCOHOL_DESTINY_G_ML } from "./consts.ts";
+} from "./types";
+import { CacheManager } from "./Cache";
+import { ALCOHOL_DESTINY_G_ML } from "./consts";
 
 export class Repository {
   private apiClient: ApiClient;
@@ -26,7 +28,13 @@ export class Repository {
     return await this.apiClient.get<City[]>("/cities");
   }
 
-  public async getPubsInCity(cityName: string): Promise<Pub[]> {
+  public async getCitiesNames(): Promise<string[]> {
+    return await this.apiClient
+      .get<City[]>("/cities")
+      .then((cities) => cities.map((city) => city.name));
+  }
+
+  private async getPubsInCityFull(cityName: string): Promise<Pub[]> {
     const city = await this.getCities().then((cities) =>
       cities.find((city) => city.name === cityName),
     );
@@ -38,20 +46,26 @@ export class Repository {
     return await this.apiClient.get<Pub[]>(`/cities/${city.id}/pubs`);
   }
 
-  public async getPubDetails(cityName: string, pubId: string): Promise<Pub> {
-    const pub = await this.getPubsInCity(cityName).then((pubs) =>
-      pubs.find((pub) => pub.id === pubId),
+  public async getPubsInCity(cityName: string): Promise<string[]> {
+    const pubs = await this.getPubsInCityFull(cityName);
+
+    return pubs.map((pub) => pub.name);
+  }
+
+  public async getPubDetails(cityName: string, pubName: string): Promise<Pub> {
+    const pub = await this.getPubsInCityFull(cityName).then((pubs) =>
+      pubs.find((pub) => pub.name === pubName),
     );
 
     if (!pub) {
-      throw new Error(`Pub ${pubId} not found`);
+      throw new Error(`Pub "${pubName}" not found`);
     }
 
     return pub;
   }
 
   public async getPubByName(cityName: string, pubName: string): Promise<Pub> {
-    const pub = await this.getPubsInCity(cityName).then((pubs) =>
+    const pub = await this.getPubsInCityFull(cityName).then((pubs) =>
       pubs.find((pub) => pub.name === pubName),
     );
 
@@ -123,10 +137,23 @@ export class Repository {
     return (abv / 100) * 500 * ALCOHOL_DESTINY_G_ML;
   };
 
+  public getGoogleMapsUrl = async (
+    cityName: string,
+    pubName: string,
+  ): Promise<string> => {
+    const pub = await this.getPubByName(cityName, pubName);
+    const urlParams = new URLSearchParams({
+      api: "1",
+      destination: `${pub.lat},${pub.lon}`,
+    });
+
+    return `https://www.google.com/maps/dir/?${urlParams.toString()}`;
+  };
+
   public getBeers = async (
     filter: BeersFilters,
   ): Promise<BeerFilterResult2> => {
-    const pubsInCity = await this.getPubsInCity(filter.cityName);
+    const pubsInCity = await this.getPubsInCityFull(filter.cityName);
 
     const pubsWithTapsInCity = (
       await Promise.all(
@@ -183,15 +210,13 @@ export class Repository {
       !filter.pubName ||
       beer.taps.some((tap) => tap.pub.name === filter.pubName);
 
-    const filterByPubId = (beer: BeerWithTaps): boolean =>
-      !filter.pubId || beer.taps.some((tap) => tap.pub.id === filter.pubId);
-
     const filterByLowerPrice = (beer: BeerWithTaps): boolean =>
       !filter.priceFrom ||
       (filter.priceFrom
         ? beer.taps.some((tap) =>
             tap.halfLiterPrice
-              ? tap.halfLiterPrice >= (filter.priceFrom ? filter.priceFrom : 0)
+              ? tap.halfLiterPrice >=
+                (filter.priceFrom ? filter.priceFrom : 9999)
               : false,
           )
         : false);
@@ -201,7 +226,7 @@ export class Repository {
       (filter.priceTo
         ? beer.taps.some((tap) =>
             tap.halfLiterPrice
-              ? tap.halfLiterPrice <= (filter.priceFrom ? filter.priceFrom : 0)
+              ? tap.halfLiterPrice <= (filter.priceTo ? filter.priceTo : 0)
               : false,
           )
         : false);
@@ -210,11 +235,25 @@ export class Repository {
       .filter(filterByStyleRegex)
       .filter(filterByPubName)
       .filter(filterByLowerPrice)
-      .filter(filterByHigherPrice)
-      .filter(filterByPubId);
+      .filter(filterByHigherPrice);
+
+    const simplifiedBeers: BeerFilterResult[] = filteredBeers.map((beer) => {
+      const pubsNames: BeerFilterResultPub[] = beer.taps.map((tap) => ({
+        pubName: tap.pub.name,
+        halfLiterPrice: tap.halfLiterPrice,
+      }));
+
+      return {
+        pubs: pubsNames,
+        beerId: beer.id,
+        beerName: beer.name,
+        beerStyle: beer.style,
+        abv: beer.abv,
+      };
+    });
 
     return {
-      beers: filteredBeers.slice(0, filter.limitBeers),
+      beers: simplifiedBeers.slice(0, filter.limitBeers),
       total: filteredBeers.length,
     };
   };

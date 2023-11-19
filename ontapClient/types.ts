@@ -79,7 +79,6 @@ export interface BeersFilters {
 
   lowerCaseStyleRegex?: string;
   pubName?: string;
-  pubId?: string;
   priceFrom?: number;
   priceTo?: number;
 }
@@ -92,9 +91,14 @@ export type BeerFilterResultSortBy =
   | "alcoholToPriceRatioAsc"
   | "alcoholToPriceRatioDesc";
 
+export interface BeerFilterResultPub {
+  pubName: string;
+  halfLiterPrice: number | null;
+}
+
 export interface BeerFilterResult {
   beerName: string;
-  beerStyle: string;
+  beerStyle: string | null;
   /**
    * should be used as reference for getting beer details
    */
@@ -102,13 +106,12 @@ export interface BeerFilterResult {
   /**
    * should be used as reference for getting pub details
    */
-  pubs: Array<{
-    pubId: PubId;
-    pubName: string;
-  }>;
+  pubs: BeerFilterResultPub[];
+
+  abv: number | null;
 }
 
 export interface BeerFilterResult2 {
-  beers: BeerWithTaps[];
+  beers: BeerFilterResult[];
   total: number;
 }

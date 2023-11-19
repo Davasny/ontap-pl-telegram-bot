@@ -1,65 +1,12 @@
-import { KV_CACHE_EXPIRE_MS } from "./consts.ts";
+import { MemoryCache } from "./MemoryCache";
+import { KeyvCache } from "./KeyvCache";
 
-export const kv = await Deno.openKv("./deno-kv.db");
-
-interface Cache {
+export interface Cache {
   get<T>(key: string): Promise<T | undefined>;
 
   set<T>(key: string, value: T): Promise<void>;
 
   listKeys<T>(): Promise<string[]>;
-}
-
-export class KvCache implements Cache {
-  public get = async <T>(key: string): Promise<T | undefined> => {
-    console.log("[KV] get", key);
-    const value = await kv.get([key]);
-
-    if (value.value) {
-      return value.value as T;
-    }
-    return undefined;
-  };
-
-  public set = async <T>(key: string, value: T): Promise<void> => {
-    console.log("[KV] set", key);
-    await kv.set([key], value, { expireIn: KV_CACHE_EXPIRE_MS });
-    return;
-  };
-
-  public listKeys = async <T>(): Promise<string[]> => {
-    console.log("[KV] list");
-
-    const iter = kv.list<string>({ prefix: [] });
-    const keys: string[] = [];
-    for await (const key of iter) {
-      keys.push(key.key.join());
-    }
-
-    return keys;
-  };
-}
-
-export class MemoryCache implements Cache {
-  private cache: Map<string, any> = new Map();
-
-  static serializeKey = (key: string[]): string => key.join("-");
-
-  public get = <T>(key: string): Promise<T | undefined> => {
-    console.log("[ME] get", key);
-    return this.cache.get(key);
-  };
-
-  public set = <T>(key: string, value: T): Promise<void> => {
-    console.log("[ME] set", key);
-    this.cache.set(key, value);
-    return new Promise((resolve) => resolve());
-  };
-
-  public listKeys = <T>(): Promise<string[]> => {
-    console.log("[ME] list");
-    return new Promise((resolve) => resolve(Array.from(this.cache.keys())));
-  };
 }
 
 export class CacheManager {
@@ -77,7 +24,7 @@ export class CacheManager {
     if (!CacheManager.instance) {
       CacheManager.instance = new CacheManager([
         new MemoryCache(),
-        new KvCache(),
+        new KeyvCache(),
       ]);
     }
 
