@@ -63,6 +63,8 @@ export class Repository {
     return pubs.map((pub) => pub.name);
   }
 
+  // todo: simplify pub details
+  // todo: simplify taps details
   public async getPubDetails(
     cityName: string,
     pubName: string,
@@ -75,11 +77,15 @@ export class Repository {
       throw new Error(`Pub "${pubName}" not found`);
     }
 
-    const taps = await this.getTapsInPub(pub.id);
+    const beers = await this.getBeers({
+      cityName: cityName,
+      pubNameRegex: pub.name.toLowerCase(),
+      limitBeers: 100,
+    });
 
     return {
       ...pub,
-      taps,
+      beers: beers.beers,
     };
   }
 

@@ -1,17 +1,24 @@
 import { Repository } from "./Repository";
 
 const main = async () => {
-  const repo = new Repository();
-  const beers = await repo.getBeers({
-    cityName: "Kraków",
-    limitBeers: 5,
-    // lowerCaseStyleRegex: "sour",
-    // priceTo: 20,
-    abvTo: 10,
-    abvFrom: 8
-  })
+  const repo = Repository.getInstance();
 
-  console.dir(beers, { depth: null});
+  const tmp = await repo.getPubDetails("Kraków", "SPOKO");
+  console.dir(JSON.stringify(tmp));
+
+  await Promise.all([
+    repo.getBeers({
+      cityName: "Kraków",
+      limitBeers: 5,
+      lowerCaseStyleRegex: "stout",
+      priceTo: 20,
+      // pubNameRegex: "viva la pinta",
+      // abvTo: 10,
+      // abvFrom: 8
+    }),
+  ]).then((values) => {
+    console.dir(values, { depth: null });
+  });
 };
 
 main();

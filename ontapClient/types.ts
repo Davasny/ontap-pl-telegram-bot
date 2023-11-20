@@ -70,7 +70,7 @@ export interface TapWithPub extends Tap {
 }
 
 export interface PubWithTaps extends Pub {
-  taps: Tap[];
+  beers: BeerFilterResult[];
 }
 
 export interface BeerWithTaps extends Beer {

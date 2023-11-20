@@ -25,6 +25,7 @@ const assistantBody: AssistantCreateParams = {
   instructions: `
 Jesteś asystentem znającym dostępne puby i piwa w mieście.
 Zawsze pytaj o miasto, które interesuje użytkownika.
+Zawsze odpowiadaj plaintext. Nigdy nie odpowiadaj markdownem.
 Nie wolno ci odpowiedzieć na pytanie, jeśli nie znasz miasta. 
 Twoim zadaniem jest udzielić informacji na temat piw na podstawie tylko i wyłącznie wiedzy dostarczonej 
 przez system.
@@ -34,7 +35,8 @@ Nie wolno robić ci założeń, jeśli brakuje Ci informacji, spytaj użytkownik
 Listy elementów pisz po przecinku, a nie od nowych linii.
 Zawsze używaj polskich znaków i polskich nazw miast.
 W przypadku pytania o drogę, odeślij link do google maps.
-Gdy opisujesz dostępne piwa, napisz tylko % alkoholu (ze znakiem %) bez "ABV"
+Gdy opisujesz dostępne piwa, napisz tylko % alkoholu (ze znakiem %) bez "ABV".
+Nie pytaj użytkownika o pomoc w odnalezieniu drogi ani wyborze innego piwa.
 `,
   tools: [
     {
@@ -182,7 +184,7 @@ export class Chatbot {
 
     let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
 
-    await this.openai.beta.assistants.retrieve(assistantId).catch(async (e) => {
+    await this.openai.beta.assistants.retrieve(assistantId).catch(async () => {
       console.log("Assistant not found, deleting from kv and creating new one");
 
       await keyv.delete(`assistantId-${assistantVersion}`);
@@ -211,6 +213,13 @@ export class Chatbot {
   private handleFunctionCall = async (
     toolCall: RequiredActionFunctionToolCall,
   ): Promise<RunSubmitToolOutputsParams.ToolOutput> => {
+    console.log(
+      "[CB]",
+      toolCall.function.name,
+      "args:",
+      toolCall.function.arguments,
+    );
+
     if (toolCall.function.name === "getCitiesNames") {
       const functionResult = await repo.getCitiesNames();
       return {
@@ -282,6 +291,14 @@ export class Chatbot {
     const threadId = await this.getThreadId();
     const assistantId = await this.getAssistantId();
 
+    const activeRuns = await this.openai.beta.threads.runs.list(threadId);
+    for await (const run of activeRuns) {
+      if (run.status === "in_progress" || run.status === "requires_action") {
+        console.log("[CB] Cancelling run:", run.id);
+        await this.openai.beta.threads.runs.cancel(threadId, run.id);
+      }
+    }
+
     await this.openai.beta.threads.messages.create(threadId, {
       role: "user",
       content: message,
@@ -327,6 +344,7 @@ export class Chatbot {
           );
 
           try {
+            console.log("[CB] Submitting tool outputs", toolOutputsPayload);
             await this.openai.beta.threads.runs.submitToolOutputs(
               threadId,
               run.id,
@@ -338,7 +356,7 @@ export class Chatbot {
             console.log(e);
           }
         }
-      }, 500);
+      }, 1000);
     });
 
     const messages = await this.openai.beta.threads.messages.list(threadId, {
