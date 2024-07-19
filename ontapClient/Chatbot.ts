@@ -278,9 +278,10 @@ export class Chatbot {
       console.log("[CB] getBeers args:", toolCall.function.arguments);
 
       const functionResult = await repo.getBeers(args);
+      const simplified = repo.simplifyGetBeersOutput(functionResult)
       return {
         tool_call_id: toolCall.id,
-        output: JSON.stringify(functionResult),
+        output: simplified,
       };
     }
 
