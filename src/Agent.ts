@@ -1,42 +1,34 @@
 import OpenAI from "openai";
-import { Repository } from "./Repository";
-import * as console from "console";
+import { OnTapService } from "./OnTapService";
 import Keyv from "keyv";
-import * as process from "process";
-import { BeersFilters } from "./types";
-import { generateHash } from "./utils";
+import { BeersFilters } from "./types/types";
 import {
   RequiredActionFunctionToolCall,
   RunSubmitToolOutputsParams,
 } from "openai/src/resources/beta/threads/runs/runs";
 import { AssistantCreateParams } from "openai/resources/beta";
+import { generateHash } from "./utils/generateHash";
+import "dotenv/config";
 
-const repo = Repository.getInstance();
+const repo = OnTapService.getInstance();
 const keyv = new Keyv("sqlite://./db.sqlite");
 
-const MODEL = {
-  m3: "gpt-3.5-turbo-1106",
-  m4: "gpt-4-1106-preview",
-};
-
-const assistantBody: AssistantCreateParams = {
+const assistantConfig: AssistantCreateParams = {
   name: "Ontap Assistant",
-  model: MODEL.m4,
+  model: "gpt-4o-mini",
   instructions: `
-Jesteś asystentem znającym dostępne puby i piwa w mieście.
-Zawsze pytaj o miasto, które interesuje użytkownika.
-Zawsze odpowiadaj plaintext. Nigdy nie odpowiadaj markdownem.
-Nie wolno ci odpowiedzieć na pytanie, jeśli nie znasz miasta. 
-Twoim zadaniem jest udzielić informacji na temat piw na podstawie tylko i wyłącznie wiedzy dostarczonej 
-przez system.
-Nie wolno Ci polegać na wcześniej zdobytej wiedzy.
-Jeśli nie masz wiedzy na jakiś temat, to poinformuj o tym użytkownika.
-Nie wolno robić ci założeń, jeśli brakuje Ci informacji, spytaj użytkownika.
-Listy elementów pisz po przecinku, a nie od nowych linii.
-Zawsze używaj polskich znaków i polskich nazw miast.
-W przypadku pytania o drogę, odeślij link do google maps.
-Gdy opisujesz dostępne piwa, napisz tylko % alkoholu (ze znakiem %) bez "ABV".
-Nie pytaj użytkownika o pomoc w odnalezieniu drogi ani wyborze innego piwa.
+You are an assistant helping users find information about pubs and beers in city.
+Your goal is to meet the following requirements:
+- always ask about user's city
+- you cannot use knowledge other than provided by the system
+- never use markdown
+- translate text into Polish
+- if you don't know something, tell the user
+- list elements separated by commas
+- never ask user if they need more help
+- when describing beers, provide only alcohol percentage without "alkohol" word, and price in "zł"
+- when using functions, provide correct full name of city
+- never pass phone numbers
 `,
   tools: [
     {
@@ -126,6 +118,10 @@ Nie pytaj użytkownika o pomoc w odnalezieniu drogi ani wyborze innego piwa.
               type: "string",
               description: "lowercase written regex for matching beer style",
             },
+            lowerCaseBeerNameRegex: {
+              type: "string",
+              description: "lowercase written regex for matching beer name",
+            },
             priceFrom: {
               type: "number",
               description: "Price from in PLN",
@@ -154,7 +150,7 @@ Nie pytaj użytkownika o pomoc w odnalezieniu drogi ani wyborze innego piwa.
   ],
 };
 
-export class Chatbot {
+export class Agent {
   private openai: OpenAI;
   private userId: string;
 
@@ -180,7 +176,7 @@ export class Chatbot {
   }
 
   private async getAssistantId(): Promise<string> {
-    const assistantVersion = generateHash(JSON.stringify(assistantBody));
+    const assistantVersion = generateHash(JSON.stringify(assistantConfig));
 
     let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
 
@@ -197,9 +193,9 @@ export class Chatbot {
       const date = new Date();
 
       const assistant = await this.openai.beta.assistants.create({
-        ...assistantBody,
+        ...assistantConfig,
         name: `${
-          assistantBody.name
+          assistantConfig.name
         } - ${date.toISOString()} - ${assistantVersion}`,
       });
 

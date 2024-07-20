@@ -9,34 +9,40 @@ importers:
   .:
     dependencies:
       '@keyv/sqlite':
-        specifier: ^3.6.7
+        specifier: 3.6.7
         version: 3.6.7
       '@types/node':
-        specifier: ^20.14.11
+        specifier: 20.14.11
         version: 20.14.11
       crypto:
-        specifier: ^1.0.1
+        specifier: 1.0.1
         version: 1.0.1
+      dotenv:
+        specifier: ^16.4.5
+        version: 16.4.5
       grammy:
-        specifier: ^1.27.0
+        specifier: 1.27.0
         version: 1.27.0(encoding@0.1.13)
       keyv:
-        specifier: ^4.5.4
+        specifier: 4.5.4
         version: 4.5.4
+      lru-cache:
+        specifier: ^11.0.0
+        version: 11.0.0
       openai:
-        specifier: ^4.52.7
+        specifier: 4.52.7
         version: 4.52.7(encoding@0.1.13)
       prettier:
-        specifier: ^3.3.3
+        specifier: 3.3.3
         version: 3.3.3
       tsx:
-        specifier: ^4.16.2
+        specifier: 4.16.2
         version: 4.16.2
       typescript:
-        specifier: ^5.5.3
+        specifier: 5.5.3
         version: 5.5.3
       wretch:
-        specifier: ^2.9.0
+        specifier: 2.9.0
         version: 2.9.0
 
 packages:
@@ -323,6 +329,10 @@ packages:
     resolution: {integrity: sha512-bwy0MGW55bG41VqxxypOsdSdGqLwXPI/focwgTYCFMbdUiBAxLg9CFzG08sz2aqzknwiX7Hkl0bQENjg8iLByw==}
     engines: {node: '>=8'}
 
+  dotenv@16.4.5:
+    resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
+    engines: {node: '>=12'}
+
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
 
@@ -470,6 +480,10 @@ packages:
 
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
+
+  lru-cache@11.0.0:
+    resolution: {integrity: sha512-Qv32eSV1RSCfhY3fpPE2GNZ8jgM9X7rdAfemLWqTUxwiyIC4jJ6Sy0fZ8H+oLWevO6i4/bizg7c8d8i6bxrzbA==}
+    engines: {node: 20 || >=22}
 
   lru-cache@6.0.0:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
@@ -1014,6 +1028,8 @@ snapshots:
 
   detect-libc@2.0.3: {}
 
+  dotenv@16.4.5: {}
+
   emoji-regex@8.0.0:
     optional: true
 
@@ -1206,6 +1222,8 @@ snapshots:
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
+
+  lru-cache@11.0.0: {}
 
   lru-cache@6.0.0:
     dependencies:

@@ -1,13 +1,13 @@
 import { Bot } from "grammy";
-import { User } from "./User";
+import { User } from "../User";
 import * as console from "console";
 import * as process from "process";
 
 const main = async () => {
-  const botToken = process.env.BOT_TOKEN;
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
   if (!botToken) {
-    console.error("BOT_TOKEN env variable not set");
+    console.error("TELEGRAM_BOT_TOKEN env variable not set");
     process.exit(1);
   }
 
@@ -24,9 +24,13 @@ const main = async () => {
   bot.command("md", async (ctx) => {
     const chatId = ctx.msg.chat.id;
 
-    await bot.api.sendMessage(chatId, "[ontap](https://ontap.pl) _under_ *bold*", {
-      parse_mode: "Markdown",
-    });
+    await bot.api.sendMessage(
+      chatId,
+      "[ontap](https://ontap.pl) _under_ *bold*",
+      {
+        parse_mode: "Markdown",
+      },
+    );
   });
 
   bot.command("counter", async (ctx) => {

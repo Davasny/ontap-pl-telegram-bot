@@ -1,7 +1,7 @@
-import { Repository } from "./Repository";
+import { OnTapService } from "./OnTapService";
 
 const main = async () => {
-  const repo = Repository.getInstance();
+  const repo = OnTapService.getInstance();
 
   const tmp = await repo.getPubDetails("Kraków", "SPOKO");
   console.dir(JSON.stringify(tmp));
@@ -16,9 +16,9 @@ const main = async () => {
     // abvFrom: 8
   });
   const simplified = repo.simplifyGetBeersOutput(beers);
-  console.log(JSON.stringify(beers))
-  console.log()
-  console.log(simplified)
+  console.log(JSON.stringify(beers));
+  console.log();
+  console.log(simplified);
 
   console.log("json", JSON.stringify(beers).length);
   console.log("simplified", simplified.length);

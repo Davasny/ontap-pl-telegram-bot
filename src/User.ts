@@ -1,12 +1,12 @@
-import { Chatbot } from "./Chatbot";
+import { Agent } from "./Agent";
 
 export class User {
   private readonly userId: string;
-  private readonly chatbot: Chatbot;
+  private readonly chatbot: Agent;
 
   constructor(userId: string) {
     this.userId = userId;
-    this.chatbot = new Chatbot(userId);
+    this.chatbot = new Agent(userId);
   }
 
   public processMessage = async (message: string): Promise<string> => {

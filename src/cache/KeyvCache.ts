@@ -5,7 +5,6 @@ const keyv = new Keyv("sqlite://./api-cache.sqlite");
 
 export class KeyvCache implements ICache {
   public get = async <T>(key: string): Promise<T | undefined> => {
-    console.log("[KV] get", key);
     const value = await keyv.get(key);
 
     if (value) {
@@ -15,13 +14,13 @@ export class KeyvCache implements ICache {
   };
 
   public set = async <T>(key: string, value: T): Promise<void> => {
-    console.log("[KV] set", key);
+    // console.log("[KV] set", key);
     await keyv.set(key, value);
     return;
   };
 
   public listKeys = async <T>(): Promise<string[]> => {
-    console.log("[KV] list");
+    // console.log("[KV] list");
 
     const iter = keyv.iterator();
     const keys: string[] = [];

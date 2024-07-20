@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "cli": "tsx src/cli.ts",
+    "cli": "tsx src/entrypoints/cli.ts",
     "test": "tsx src/RepoTest.ts",
-    "telegram": "tsx src/telegram.ts"
+    "telegram": "tsx src/entrypoints/telegram.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +15,10 @@
     "@keyv/sqlite": "3.6.7",
     "@types/node": "20.14.11",
     "crypto": "1.0.1",
+    "dotenv": "^16.4.5",
     "grammy": "1.27.0",
     "keyv": "4.5.4",
+    "lru-cache": "^11.0.0",
     "openai": "4.52.7",
     "prettier": "3.3.3",
     "tsx": "4.16.2",

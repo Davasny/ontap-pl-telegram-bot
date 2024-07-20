@@ -82,6 +82,7 @@ export interface BeersFilters {
   limitBeers: number;
 
   lowerCaseStyleRegex?: string;
+  lowerCaseBeerNameRegex?: string;
   pubNameRegex?: string;
   priceFrom?: number;
   priceTo?: number;

@@ -1,4 +1,3 @@
-import { ApiClient } from "./ApiClient";
 import {
   Beer,
   BeerFilterResult,
@@ -12,36 +11,49 @@ import {
   PubWithTaps,
   Tap,
   TapWithPub,
-} from "./types";
-import { CacheManager } from "./CacheManager";
-import { ALCOHOL_DESTINY_G_ML } from "./consts";
+} from "./types/types";
+import { CacheManager } from "./cache/CacheManager";
+import { ALCOHOL_DESTINY_G_ML, LRU_CACHE_TTL } from "./consts";
+import wretch from "wretch";
+import { lruCache } from "./cache/lruCache";
+import "dotenv/config";
 
-export class Repository {
-  private static instance: Repository;
+const onTapApiClient = wretch("https://ontap.pl/api/v1")
+  .headers({
+    "api-key": process.env.ONTAP_API_KEY,
+  })
+  .middlewares([
+    lruCache({
+      ttl: LRU_CACHE_TTL,
+      max: 1000,
+    }),
+  ]);
 
-  private apiClient: ApiClient;
+export class OnTapService {
+  private static instance: OnTapService;
   private cacheManager: CacheManager;
 
   constructor() {
-    this.apiClient = new ApiClient();
     this.cacheManager = CacheManager.getInstance();
   }
 
-  public static getInstance(): Repository {
-    if (!Repository.instance) {
-      Repository.instance = new Repository();
+  public static getInstance(): OnTapService {
+    if (!OnTapService.instance) {
+      OnTapService.instance = new OnTapService();
     }
 
-    return Repository.instance;
+    return OnTapService.instance;
   }
 
   public async getCities(): Promise<City[]> {
-    return await this.apiClient.get<City[]>("/cities");
+    return await onTapApiClient.url("/cities").get().json<City[]>();
   }
 
   public async getCitiesNames(): Promise<string[]> {
-    return await this.apiClient
-      .get<City[]>("/cities")
+    return await onTapApiClient
+      .url("/cities")
+      .get("/cities")
+      .json<City[]>()
       .then((cities) => cities.map((city) => city.name));
   }
 
@@ -54,7 +66,10 @@ export class Repository {
       throw new Error(`City ${cityName} not found`);
     }
 
-    return await this.apiClient.get<Pub[]>(`/cities/${city.id}/pubs`);
+    return await onTapApiClient
+      .url(`/cities/${city.id}/pubs`)
+      .get()
+      .json<Pub[]>();
   }
 
   public async getPubsInCity(cityName: string): Promise<string[]> {
@@ -104,17 +119,20 @@ export class Repository {
   private static getBeerCacheKey = (beer: Beer): string => `beer-${beer.id}`;
 
   public async getTapsInPub(pubId: string): Promise<Tap[]> {
-    const taps = await this.apiClient.get<Tap[]>(`/pubs/${pubId}/taps`);
+    const taps = await onTapApiClient
+      .url(`/pubs/${pubId}/taps`)
+      .get()
+      .json<Tap[]>();
 
     const cachedBeers: string[] = await this.cacheManager.listKeys();
 
     for (const tap of taps) {
       if (
         tap.beer &&
-        !cachedBeers.includes(Repository.getBeerCacheKey(tap.beer))
+        !cachedBeers.includes(OnTapService.getBeerCacheKey(tap.beer))
       ) {
         await this.cacheManager.set(
-          Repository.getBeerCacheKey(tap.beer),
+          OnTapService.getBeerCacheKey(tap.beer),
           tap.beer,
         );
       }
@@ -212,8 +230,8 @@ export class Repository {
 
     for (const pubWithTaps of filteredPubsByName) {
       for (const tap of pubWithTaps.taps) {
-        const halfLiterPrice = Repository.getHalfLiterPrice(tap);
-        const halfLiterAlcoholWeight = Repository.getAlcoholWeight(tap);
+        const halfLiterPrice = OnTapService.getHalfLiterPrice(tap);
+        const halfLiterAlcoholWeight = OnTapService.getAlcoholWeight(tap);
         const alcoholToPriceRatio =
           halfLiterAlcoholWeight && halfLiterPrice
             ? halfLiterAlcoholWeight / halfLiterPrice
@@ -249,6 +267,14 @@ export class Repository {
       !filter.lowerCaseStyleRegex ||
       (beer.style
         ? new RegExp(filter.lowerCaseStyleRegex).test(beer.style.toLowerCase())
+        : false);
+
+    const filterByBeerNameRegex = (beer: BeerWithTaps): boolean =>
+      !filter.lowerCaseBeerNameRegex ||
+      (beer.name
+        ? new RegExp(filter.lowerCaseBeerNameRegex).test(
+            beer.name.toLowerCase(),
+          )
         : false);
 
     const filterByLowerPrice = (beer: BeerWithTaps): boolean =>
@@ -289,7 +315,8 @@ export class Repository {
       .filter(filterByLowerPrice)
       .filter(filterByHigherPrice)
       .filter(filterByLowerAbv)
-      .filter(filterByHigherAbv);
+      .filter(filterByHigherAbv)
+      .filter(filterByBeerNameRegex);
 
     const simplifiedBeers: BeerFilterResult[] = filteredBeers.map((beer) => {
       const pubs: BeerFilterResultPub[] = beer.taps.map((tap) => ({
