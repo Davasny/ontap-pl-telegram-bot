@@ -4,12 +4,12 @@ import * as console from "console";
 import Keyv from "keyv";
 import * as process from "process";
 import { BeersFilters } from "./types";
-import { AssistantCreateParams } from "openai/src/resources/beta/assistants/assistants";
 import { generateHash } from "./utils";
 import {
   RequiredActionFunctionToolCall,
   RunSubmitToolOutputsParams,
 } from "openai/src/resources/beta/threads/runs/runs";
+import { AssistantCreateParams } from "openai/resources/beta";
 
 const repo = Repository.getInstance();
 const keyv = new Keyv("sqlite://./db.sqlite");
@@ -278,7 +278,7 @@ export class Chatbot {
       console.log("[CB] getBeers args:", toolCall.function.arguments);
 
       const functionResult = await repo.getBeers(args);
-      const simplified = repo.simplifyGetBeersOutput(functionResult)
+      const simplified = repo.simplifyGetBeersOutput(functionResult);
       return {
         tool_call_id: toolCall.id,
         output: simplified,

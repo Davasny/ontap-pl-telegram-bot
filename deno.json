@@ -1,5 +1,0 @@
-{
-  "tasks": {
-    "dev": "deno run --watch --unstable --allow-net --allow-read --allow-write ontapClient/OntapClient.ts"
-  }
-}
