@@ -7,7 +7,7 @@ import {
 
 import { LRUCache } from "lru-cache";
 
-export const lruCache = (
+export const LruCache = (
   lruOptions: LRUCache.Options<string, WretchResponse, unknown>,
 ): ConfiguredMiddleware => {
   const cache = new LRUCache<string, WretchResponse>(lruOptions);
@@ -21,8 +21,6 @@ export const lruCache = (
       if (cachedResponse) {
         return cachedResponse.clone();
       }
-
-      console.log("Cache miss", url);
 
       const response = await next(url, opts);
       if (response.ok) {

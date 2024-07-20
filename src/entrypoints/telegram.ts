@@ -1,7 +1,6 @@
 import { Bot } from "grammy";
-import { User } from "../User";
-import * as console from "console";
-import * as process from "process";
+import { Agent } from "../agent/Agent";
+import { debounce } from "../utils/debounce";
 
 const main = async () => {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -12,8 +11,6 @@ const main = async () => {
   }
 
   const bot = new Bot(botToken);
-
-  const users: Map<string, User> = new Map();
 
   bot.command("start", async (ctx) => {
     await ctx.reply(
@@ -33,45 +30,10 @@ const main = async () => {
     );
   });
 
-  bot.command("counter", async (ctx) => {
-    const chatId = ctx.msg.chat.id;
-
-    const msg = `ping`;
-
-    const msgObj = await ctx.reply(msg, { parse_mode: "MarkdownV2" });
-
-    let i = 5;
-
-    let newMessage = `Odliczam ${i}`;
-    await new Promise<void>((resolve) => {
-      const interval = setInterval(async () => {
-        i--;
-        newMessage = `${newMessage}, ${i}`;
-        console.log(newMessage);
-
-        await bot.api.editMessageText(chatId, msgObj.message_id, newMessage);
-
-        if (i <= 0) {
-          clearInterval(interval);
-          resolve();
-        }
-      }, 500);
-    });
-
-    newMessage = `${newMessage}. Gotowe!`;
-    await bot.api.editMessageText(chatId, msgObj.message_id, newMessage);
-  });
-
   bot.on("message", async (ctx) => {
     const chatId = ctx.msg.chat.id;
-
     const userId = ctx.update.message.from.id.toString();
-
-    let user = users.get(userId);
-    if (!user) {
-      user = new User(userId);
-      users.set(userId, user);
-    }
+    const agent = new Agent(userId);
 
     const msg = ctx.update.message.text;
     if (!msg) {
@@ -82,41 +44,31 @@ const main = async () => {
       return;
     }
 
-    const pendingMessageText = "Myślę";
+    const pendingMessageText = "👀";
     const message = await bot.api.sendMessage(chatId, pendingMessageText, {
       parse_mode: "Markdown",
     });
 
-    await new Promise<void>((resolve) => {
-      let i = 0;
-      const interval = setInterval(async () => {
-        i++;
-        let newMessage = `${pendingMessageText}`;
-        for (let j = 0; j < i; j++) {
-          newMessage = `${newMessage}.`;
-        }
+    const debouncedEditMessageText = debounce(
+      async (chatId: number, messageId: number, snapshot: string) => {
+        await bot.api.editMessageText(chatId, messageId, snapshot);
+      },
+      50,
+    );
 
-        if (i === 3) {
-          i = 0;
-        }
-
-        await bot.api.editMessageText(chatId, message.message_id, newMessage);
-      }, 1000);
-
-      user?.processMessage(msg).then(async (response) => {
-        clearInterval(interval);
-        await bot.api.editMessageText(chatId, message.message_id, response, {
-          parse_mode: "Markdown",
-        });
-        resolve();
-      });
+    agent.on("assistantMessage", async ({ snapshot }) => {
+      await debouncedEditMessageText(
+        chatId,
+        message.message_id,
+        snapshot.value,
+      );
     });
 
-    return;
+    agent.emit("userMessage", msg);
   });
 
   console.log("Starting bot");
-  bot.start();
+  await bot.start();
 };
 
 main();

@@ -15,7 +15,7 @@ import {
 import { CacheManager } from "./cache/CacheManager";
 import { ALCOHOL_DESTINY_G_ML, LRU_CACHE_TTL } from "./consts";
 import wretch from "wretch";
-import { lruCache } from "./cache/lruCache";
+import { LruCache } from "./cache/lruCache";
 import "dotenv/config";
 
 const onTapApiClient = wretch("https://ontap.pl/api/v1")
@@ -23,7 +23,7 @@ const onTapApiClient = wretch("https://ontap.pl/api/v1")
     "api-key": process.env.ONTAP_API_KEY,
   })
   .middlewares([
-    lruCache({
+    LruCache({
       ttl: LRU_CACHE_TTL,
       max: 1000,
     }),
@@ -52,7 +52,7 @@ export class OnTapService {
   public async getCitiesNames(): Promise<string[]> {
     return await onTapApiClient
       .url("/cities")
-      .get("/cities")
+      .get()
       .json<City[]>()
       .then((cities) => cities.map((city) => city.name));
   }
