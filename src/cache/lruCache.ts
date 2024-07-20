@@ -19,7 +19,6 @@ export const lruCache = (
     ): Promise<WretchResponse> => {
       const cachedResponse = cache.get(url);
       if (cachedResponse) {
-        console.log("Cache hit", url);
         return cachedResponse.clone();
       }
 

@@ -216,72 +216,65 @@ export class Agent {
       toolCall.function.arguments,
     );
 
-    if (toolCall.function.name === "getCitiesNames") {
-      const functionResult = await repo.getCitiesNames();
-      return {
-        tool_call_id: toolCall.id,
-        output: functionResult.join(", "),
-      };
+    let functionResult: string | string[] =
+      `Unknown function ${toolCall.function.name}`;
+
+    try {
+      if (toolCall.function.name === "getCitiesNames") {
+        functionResult = await repo.getCitiesNames();
+      }
+
+      if (toolCall.function.name === "getPubsInCity") {
+        const args = JSON.parse(toolCall.function.arguments) as {
+          cityName: string;
+        };
+
+        functionResult = await repo.getPubsInCity(args.cityName);
+      }
+
+      if (toolCall.function.name === "getPubDetails") {
+        const args = JSON.parse(toolCall.function.arguments) as {
+          cityName: string;
+          pubName: string;
+        };
+
+        const functionResultObject = await repo.getPubDetails(
+          args.cityName,
+          args.pubName,
+        );
+        functionResult = JSON.stringify(functionResultObject);
+      }
+
+      if (toolCall.function.name === "getGoogleMapsUrl") {
+        const args = JSON.parse(toolCall.function.arguments) as {
+          cityName: string;
+          pubName: string;
+        };
+
+        functionResult = await repo.getGoogleMapsUrl(
+          args.cityName,
+          args.pubName,
+        );
+      }
+
+      if (toolCall.function.name === "getBeers") {
+        const args = JSON.parse(toolCall.function.arguments) as BeersFilters;
+        const fullResult = await repo.getBeers(args);
+        functionResult = repo.simplifyGetBeersOutput(fullResult);
+      }
+    } catch (e) {
+      functionResult = `Exception occurred: ${e}`;
+      if (e instanceof Error) {
+        functionResult = `Exception occurred: ${e.message}`;
+      }
     }
 
-    if (toolCall.function.name === "getPubsInCity") {
-      const args = JSON.parse(toolCall.function.arguments) as {
-        cityName: string;
-      };
-
-      const functionResult = await repo.getPubsInCity(args.cityName);
-      return {
-        tool_call_id: toolCall.id,
-        output: functionResult.join(", "),
-      };
-    }
-
-    if (toolCall.function.name === "getPubDetails") {
-      const args = JSON.parse(toolCall.function.arguments) as {
-        cityName: string;
-        pubName: string;
-      };
-
-      const functionResult = await repo.getPubDetails(
-        args.cityName,
-        args.pubName,
-      );
-      return {
-        tool_call_id: toolCall.id,
-        output: JSON.stringify(functionResult),
-      };
-    }
-
-    if (toolCall.function.name === "getGoogleMapsUrl") {
-      const args = JSON.parse(toolCall.function.arguments) as {
-        cityName: string;
-        pubName: string;
-      };
-
-      const functionResult = await repo.getGoogleMapsUrl(
-        args.cityName,
-        args.pubName,
-      );
-      return {
-        tool_call_id: toolCall.id,
-        output: functionResult,
-      };
-    }
-
-    if (toolCall.function.name === "getBeers") {
-      const args = JSON.parse(toolCall.function.arguments) as BeersFilters;
-
-      console.log("[CB] getBeers args:", toolCall.function.arguments);
-
-      const functionResult = await repo.getBeers(args);
-      const simplified = repo.simplifyGetBeersOutput(functionResult);
-      return {
-        tool_call_id: toolCall.id,
-        output: simplified,
-      };
-    }
-
-    throw new Error(`Unknown function ${toolCall.function.name}`);
+    return {
+      tool_call_id: toolCall.id,
+      output: Array.isArray(functionResult)
+        ? functionResult.join(", ")
+        : functionResult,
+    };
   };
 
   public async processMessage(message: string): Promise<string> {
