@@ -56,12 +56,13 @@ const main = async () => {
       50,
     );
 
+    let lassMessage = "";
     agent.on("assistantMessage", async ({ snapshot }) => {
-      await debouncedEditMessageText(
-        chatId,
-        message.message_id,
-        snapshot.value,
-      );
+      const newMessage = snapshot.value;
+      if (lassMessage !== newMessage) {
+        lassMessage = snapshot;
+        await debouncedEditMessageText(chatId, message.message_id, newMessage);
+      }
     });
 
     agent.emit("userMessage", msg);
