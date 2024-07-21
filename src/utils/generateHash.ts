@@ -1,5 +1,5 @@
-import { createHash } from "crypto";
+import sha256 from "crypto-js/sha256";
 
 export const generateHash = (input: string): string => {
-  return createHash("sha256").update(input).digest("hex");
+  return sha256(input).toString();
 };
