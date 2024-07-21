@@ -45,9 +45,9 @@ job "ontap-bot" {
         }
 
         env {
-          ONTAP_API_KEY        = var.ONTAP_API_KEY
-          TELEGRAM_BOT_TOKEN   = var.TELEGRAM_BOT_TOKEN
-          OPENAI_API_KEY       = var.OPENAI_API_KEY
+          ONTAP_API_KEY      = var.ontap_api_key
+          TELEGRAM_BOT_TOKEN = var.telegram_bot_token
+          OPENAI_API_KEY     = var.openai_api_key
           PERSISTENT_DATA_PATH = "/data"
         }
 
