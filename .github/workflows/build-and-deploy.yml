@@ -51,7 +51,7 @@ jobs:
         env:
           TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.TUNNEL_SERVICE_TOKEN_ID }}
           TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.TUNNEL_SERVICE_TOKEN_SECRET }}
-        run: sudo nohup cloudflared access tcp --hostname nomad-tcp.justdockerize.it --url localhost:4646 &
+        run: sudo -E nohup cloudflared access tcp --hostname nomad-tcp.justdockerize.it --url localhost:4646 &
 
       - name: Deploy to nomad
         env:
