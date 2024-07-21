@@ -43,22 +43,22 @@ job "ontap-bot" {
           username = var.docker_user
           password = var.docker_password
         }
+      }
 
-        env {
-          ONTAP_API_KEY      = var.ontap_api_key
-          TELEGRAM_BOT_TOKEN = var.telegram_bot_token
-          OPENAI_API_KEY     = var.openai_api_key
-          PERSISTENT_DATA_PATH = "/data"
-        }
+      env {
+        ONTAP_API_KEY        = var.ontap_api_key
+        TELEGRAM_BOT_TOKEN   = var.telegram_bot_token
+        OPENAI_API_KEY       = var.openai_api_key
+        PERSISTENT_DATA_PATH = "/data"
+      }
 
-        resources {
-          memory = 512
-        }
+      resources {
+        memory = 512
+      }
 
-        volume_mount {
-          volume      = "ontap-bot"
-          destination = "/data"
-        }
+      volume_mount {
+        volume      = "ontap-bot"
+        destination = "/data"
       }
     }
 
