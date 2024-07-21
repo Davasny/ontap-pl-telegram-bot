@@ -57,7 +57,7 @@ jobs:
         env:
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
         run: |
-          ./nomad job run \
+          nomad job run \
             -var docker_user=${{ secrets.DOCKERHUB_USERNAME }} \
             -var docker_password=${{ secrets.DOCKERHUB_TOKEN }} \
             -var dockerhub_repository=${{ vars.DOCKERHUB_REPOSITORY }} \
