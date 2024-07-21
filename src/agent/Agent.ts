@@ -13,7 +13,9 @@ import { AssistantStream } from "openai/lib/AssistantStream";
 import { assistantConfig } from "./agentConfig";
 
 const repo = OnTapService.getInstance();
-const keyv = new Keyv("sqlite://./db.sqlite");
+
+const persistentDataPath = process.env.PERSISTENT_DATA_PATH || ".";
+const keyv = new Keyv(`sqlite://${persistentDataPath}/db.sqlite`);
 
 export class Agent extends EventEmitter {
   private openai: OpenAI;

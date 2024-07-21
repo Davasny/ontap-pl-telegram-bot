@@ -15,12 +15,17 @@ import {
 import { CacheManager } from "./cache/CacheManager";
 import { ALCOHOL_DESTINY_G_ML, LRU_CACHE_TTL } from "./consts";
 import wretch from "wretch";
-import { LruCache } from "./cache/lruCache";
+import { LruCache } from "./cache/LruCache";
 import "dotenv/config";
+
+const onTapApiKey = process.env.ONTAP_API_KEY;
+if (!onTapApiKey) {
+  throw new Error("ONTAP_API_KEY env variable not set");
+}
 
 const onTapApiClient = wretch("https://ontap.pl/api/v1")
   .headers({
-    "api-key": process.env.ONTAP_API_KEY,
+    "api-key": onTapApiKey,
   })
   .middlewares([
     LruCache({

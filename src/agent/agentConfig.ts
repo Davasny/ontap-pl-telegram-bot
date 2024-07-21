@@ -99,7 +99,7 @@ Your goal is to meet the following requirements:
             },
             limitBeers: {
               type: "number",
-              description: "Limit returned beers",
+              description: "Specify how much beers will be returned",
             },
             lowerCaseStyleRegex: {
               type: "string",

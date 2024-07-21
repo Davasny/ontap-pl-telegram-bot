@@ -1,7 +1,8 @@
 import Keyv from "keyv";
 import { ICache } from "./CacheManager";
 
-const keyv = new Keyv("sqlite://./api-cache.sqlite");
+const persistentDataPath = process.env.PERSISTENT_DATA_PATH || ".";
+const keyv = new Keyv(`sqlite://${persistentDataPath}/api-cache.sqlite`);
 
 export class KeyvCache implements ICache {
   public get = async <T>(key: string): Promise<T | undefined> => {
