@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { OnTapService } from "../OnTapService";
+import { OnTapService } from "../onTap/OnTapService";
 import Keyv from "keyv";
 import { BeersFilters } from "../types/types";
 import {
@@ -13,8 +13,9 @@ import { AssistantStream } from "openai/lib/AssistantStream";
 import { assistantConfig } from "./agentConfig";
 import type Pino from "pino";
 import { IUserMessagePayload } from "../types/events";
+import { getSimplifiedBeersList } from "../onTap/getSimplifiedBeersList";
 
-const repo = OnTapService.getInstance();
+const onTap = OnTapService.getInstance();
 
 const persistentDataPath = process.env.PERSISTENT_DATA_PATH || ".";
 const keyv = new Keyv(`sqlite://${persistentDataPath}/db.sqlite`);
@@ -125,7 +126,7 @@ export class Agent extends EventEmitter {
 
     try {
       if (functionName === "getCitiesNames") {
-        functionResult = await repo.getCitiesNames();
+        functionResult = await onTap.getCitiesNames();
       }
 
       if (functionName === "getPubsInCity") {
@@ -133,7 +134,7 @@ export class Agent extends EventEmitter {
           cityName: string;
         };
 
-        functionResult = await repo.getPubsInCity(args.cityName);
+        functionResult = await onTap.getPubsInCity(args.cityName);
       }
 
       if (functionName === "getPubDetails") {
@@ -142,7 +143,7 @@ export class Agent extends EventEmitter {
           pubName: string;
         };
 
-        const functionResultObject = await repo.getPubDetails(
+        const functionResultObject = await onTap.getPubDetails(
           args.cityName,
           args.pubName,
         );
@@ -155,7 +156,7 @@ export class Agent extends EventEmitter {
           pubName: string;
         };
 
-        functionResult = await repo.getGoogleMapsUrl(
+        functionResult = await onTap.getGoogleMapsUrl(
           args.cityName,
           args.pubName,
         );
@@ -163,8 +164,8 @@ export class Agent extends EventEmitter {
 
       if (functionName === "getBeers") {
         const args = JSON.parse(functionArgs) as BeersFilters;
-        const fullResult = await repo.getBeers(args);
-        functionResult = repo.simplifyGetBeersOutput(fullResult);
+        const fullResult = await onTap.getBeers(args);
+        functionResult = getSimplifiedBeersList(fullResult);
       }
     } catch (e) {
       functionResult = `Exception occurred: ${e}`;
@@ -200,7 +201,7 @@ export class Agent extends EventEmitter {
 
     oaiStream.on("textDone", () => {
       this.logger.info({
-        msg: `assistant: ${fullMsgText}`,
+        msg: `assistant: ${fullMsgText.slice(0, 100)}`,
         response: fullMsgText,
         duration: Date.now() - start,
         type: "textDone",
@@ -250,7 +251,7 @@ export class Agent extends EventEmitter {
 
       this.logger.info({
         msg: "system: submitToolOutputs",
-        output: tool_outputs,
+        tool_outputs: JSON.stringify(tool_outputs),
         type: "submitToolOutputs",
       });
 

@@ -7,7 +7,7 @@ import {
 
 import { LRUCache } from "lru-cache";
 
-export const LruCache = (
+export const WretchLruMiddleware = (
   lruOptions: LRUCache.Options<string, WretchResponse, unknown>,
 ): ConfiguredMiddleware => {
   const cache = new LRUCache<string, WretchResponse>(lruOptions);
