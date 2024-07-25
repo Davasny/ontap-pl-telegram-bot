@@ -65,4 +65,5 @@ jobs:
             -var ontap_api_key=${{ secrets.ONTAP_API_KEY }} \
             -var telegram_bot_token=${{ secrets.TELEGRAM_BOT_TOKEN }} \
             -var openai_api_key=${{ secrets.OPENAI_API_KEY }} \
+            -var hyperdx_api_key=${{ secrets.HYPERDX_API_KEY }} \
             ./ci/ontap-bot.nomad
