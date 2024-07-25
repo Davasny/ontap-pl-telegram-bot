@@ -1,10 +1,12 @@
 import { Bot } from "grammy";
 import { Agent } from "../agent/Agent";
 import { debounce } from "../utils/debounce";
+import { logger } from "../logger";
+import { WELCOME_MESSAGE } from "../consts";
+import { IUserMessagePayload } from "../types/events";
 
 const main = async () => {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-
   if (!botToken) {
     console.error("TELEGRAM_BOT_TOKEN env variable not set");
     process.exit(1);
@@ -13,9 +15,7 @@ const main = async () => {
   const bot = new Bot(botToken);
 
   bot.command("start", async (ctx) => {
-    await ctx.reply(
-      "Witaj! W czym mogę Ci pomóc? Czy interesuje Cię wyszukanie pubu lub konkretnego piwa w wybranym mieście? Proszę podać miasto i preferencje dotyczące piwa.",
-    );
+    await ctx.reply(WELCOME_MESSAGE);
   });
 
   bot.command("md", async (ctx) => {
@@ -33,7 +33,19 @@ const main = async () => {
   bot.on("message", async (ctx) => {
     const chatId = ctx.msg.chat.id;
     const userId = ctx.update.message.from.id.toString();
-    const agent = new Agent(userId);
+    const username = ctx.update.message.from.username;
+
+    const msgId = ctx.update.message.message_id;
+    const traceId = `${chatId}:${userId}:${username}:${msgId}`;
+    const childLogger = logger.child({
+      trace_id: traceId,
+      userId,
+      username,
+      chatId,
+      messageId: msgId,
+    });
+
+    const agent = new Agent(userId, childLogger);
 
     const msg = ctx.update.message.text;
     if (!msg) {
@@ -65,10 +77,14 @@ const main = async () => {
       }
     });
 
-    agent.emit("userMessage", msg);
+    const payload: IUserMessagePayload = {
+      message: msg,
+    };
+
+    agent.emit("userMessage", payload);
   });
 
-  console.log("Starting bot");
+  logger.info("Starting bot");
   await bot.start();
 };
 

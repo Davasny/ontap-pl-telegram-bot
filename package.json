@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@hyperdx/node-opentelemetry": "0.8.0",
     "@keyv/sqlite": "3.6.7",
     "@types/crypto-js": "4.2.2",
     "@types/node": "20.14.11",
@@ -22,6 +23,8 @@
     "keyv": "4.5.4",
     "lru-cache": "11.0.0",
     "openai": "4.52.7",
+    "pino": "9.3.1",
+    "pino-pretty": "11.2.1",
     "pm2": "5.4.2",
     "prettier": "3.3.3",
     "tsx": "4.16.2",

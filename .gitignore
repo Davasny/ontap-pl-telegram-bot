@@ -6,3 +6,4 @@ deno-kv.db
 *.sqlite
 
 dist/
+hyperdx_data/

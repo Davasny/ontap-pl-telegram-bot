@@ -11,6 +11,8 @@ import "dotenv/config";
 import { EventEmitter } from "events";
 import { AssistantStream } from "openai/lib/AssistantStream";
 import { assistantConfig } from "./agentConfig";
+import type Pino from "pino";
+import { IUserMessagePayload } from "../types/events";
 
 const repo = OnTapService.getInstance();
 
@@ -19,28 +21,38 @@ const keyv = new Keyv(`sqlite://${persistentDataPath}/db.sqlite`);
 
 export class Agent extends EventEmitter {
   private openai: OpenAI;
-  private userId: string;
+  private logger: Pino.Logger;
 
-  constructor(userId: string) {
+  private readonly userId;
+
+  constructor(userId: string, userLogger: Pino.Logger) {
     super();
+
+    this.logger = userLogger;
+    this.userId = userId;
 
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    this.userId = userId;
-
-    this.on("userMessage", (message) => this.processMessage(message));
+    this.on("userMessage", (payload: IUserMessagePayload) =>
+      this.processMessage(payload.message),
+    );
   }
 
-  private async getThreadId(): Promise<string> {
-    let threadId = await keyv.get(`threadId-${this.userId}`);
+  private async getThreadId(userId: string): Promise<string> {
+    let threadId = await keyv.get(`threadId-${userId}`);
     if (!threadId) {
       threadId = await this.openai.beta.threads
         .create()
         .then((thread) => thread.id);
-      await keyv.set(`threadId-${this.userId}`, threadId);
-      console.log(`Created new thread ${threadId} for user ${this.userId}`);
+
+      await keyv.set(`threadId-${userId}`, threadId);
+
+      this.logger.info({
+        msg: `system: created new thread ${threadId}`,
+        threadId,
+      });
     }
 
     return threadId;
@@ -52,14 +64,19 @@ export class Agent extends EventEmitter {
     let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
 
     await this.openai.beta.assistants.retrieve(assistantId).catch(async () => {
-      console.log("Assistant not found, deleting from kv and creating new one");
+      this.logger.info({
+        msg: "Assistant not found, deleting from kv and creating new one",
+      });
 
       await keyv.delete(`assistantId-${assistantVersion}`);
       assistantId = undefined;
     });
 
     if (!assistantId) {
-      console.log("Creating new assistant, config hash:", assistantVersion);
+      this.logger.info({
+        msg: `system: Creating new assistant`,
+        assistantVersion,
+      });
 
       const date = new Date();
 
@@ -97,7 +114,12 @@ export class Agent extends EventEmitter {
 
     const functionArgs = toolCall.function.arguments || "{}";
 
-    console.log("[CB]", functionName, "args:", toolCall.function.arguments);
+    this.logger.info({
+      msg: `assistant: functionCall ${functionName}`,
+      functionName,
+      functionArgs,
+      type: "functionCall",
+    });
 
     let functionResult: string | string[] = `Unknown function ${functionName}`;
 
@@ -151,6 +173,14 @@ export class Agent extends EventEmitter {
       }
     }
 
+    this.logger.info({
+      msg: `system: functionResult ${functionName}`,
+      functionName,
+      functionArgs,
+      functionResult,
+      type: "functionResult",
+    });
+
     return {
       tool_call_id: toolCall.id,
       output: Array.isArray(functionResult)
@@ -160,30 +190,69 @@ export class Agent extends EventEmitter {
   };
 
   private observeStream(oaiStream: AssistantStream, threadId: string) {
+    let fullMsgText = "";
+    let start = Date.now();
+
     oaiStream.on("textDelta", (delta, snapshot) => {
+      fullMsgText += delta.value;
       this.emit("assistantMessage", { delta: delta.value, snapshot });
+    });
+
+    oaiStream.on("textDone", () => {
+      this.logger.info({
+        msg: `assistant: ${fullMsgText}`,
+        response: fullMsgText,
+        duration: Date.now() - start,
+        type: "textDone",
+      });
     });
 
     oaiStream.on("toolCallCreated", (e) => {
       if (e.type === "function") {
         const funcName = e.function.name;
+
+        this.logger.info({
+          msg: `assistant: toolCallCreated ${funcName}`,
+          function: funcName,
+          type: "toolCallCreated",
+        });
+
         this.emit("assistantToolCreated", `Function call: ${funcName}`);
       }
     });
 
-    oaiStream.on("messageDone", () => this.emit("assistantMessageDone"));
+    oaiStream.on("messageDone", () => {
+      this.logger.info({ msg: "assistant: messageDone", type: "messageDone" });
+      this.emit("assistantMessageDone");
+    });
 
     oaiStream.on("end", async () => {
       // check if there are any tool calls to respond to
       const currentRun = oaiStream.currentRun();
-      if (!currentRun || currentRun.status !== "requires_action") return;
-      if (!currentRun.required_action) return;
+      if (
+        !currentRun ||
+        currentRun.status !== "requires_action" ||
+        !currentRun.required_action
+      ) {
+        this.logger.info({
+          msg: `system: streamEnd`,
+          status: currentRun?.status,
+          type: "streamEnd",
+        });
+        return;
+      }
 
       const tool_outputs = await Promise.all(
         currentRun.required_action?.submit_tool_outputs?.tool_calls?.map((t) =>
           this.handleFunctionCall(t),
         ),
       );
+
+      this.logger.info({
+        msg: "system: submitToolOutputs",
+        output: tool_outputs,
+        type: "submitToolOutputs",
+      });
 
       const newStream = this.openai.beta.threads.runs.submitToolOutputsStream(
         threadId,
@@ -195,17 +264,26 @@ export class Agent extends EventEmitter {
     });
   }
 
-  public async processMessage(message: string) {
-    const threadId = await this.getThreadId();
+  private async processMessage(message: string) {
     const assistantId = await this.getAssistantId();
+    const threadId = await this.getThreadId(this.userId);
 
     const activeRuns = await this.openai.beta.threads.runs.list(threadId);
     for await (const run of activeRuns) {
       if (run.status === "in_progress" || run.status === "requires_action") {
-        console.log("[CB] Cancelling orphaned run:", run.id);
+        this.logger.warn({
+          msg: `system: Cancelling orphaned run: ${run.id}`,
+          type: "cancelRun",
+        });
         await this.openai.beta.threads.runs.cancel(threadId, run.id);
       }
     }
+
+    this.logger.info({
+      msg: `user: ${message}`,
+      content: message,
+      type: "newMessage",
+    });
 
     await this.openai.beta.threads.messages.create(threadId, {
       role: "user",
@@ -217,7 +295,5 @@ export class Agent extends EventEmitter {
     });
 
     this.observeStream(oaiStream, threadId);
-
-    oaiStream.on("messageDone", () => this.emit("assistantMessageDone"));
   }
 }
