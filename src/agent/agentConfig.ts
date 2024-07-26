@@ -32,7 +32,7 @@ Your goal is to meet the following requirements:
     {
       type: "function",
       function: {
-        name: "getPubsInCity",
+        name: "getPubNamesInCity",
         description: "List available pubs in city",
         parameters: {
           type: "object",

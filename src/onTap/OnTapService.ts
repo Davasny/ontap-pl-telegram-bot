@@ -102,8 +102,7 @@ export class OnTapService {
       .then((cities) => cities.map((city) => city.name));
   }
 
-  // todo: refactor to getPubsInCity
-  private async getPubsInCityFull(cityName: string): Promise<Pub[]> {
+  private async getPubsInCity(cityName: string): Promise<Pub[]> {
     const city = await this.getCities().then((cities) =>
       cities.find((city) => city.name === cityName),
     );
@@ -118,20 +117,17 @@ export class OnTapService {
       .json<Pub[]>();
   }
 
-  // todo: refactor to getPubNamesInCity
-  public async getPubsInCity(cityName: string): Promise<string[]> {
-    const pubs = await this.getPubsInCityFull(cityName);
+  public async getPubNamesInCity(cityName: string): Promise<string[]> {
+    const pubs = await this.getPubsInCity(cityName);
 
     return pubs.map((pub) => pub.name);
   }
 
-  // todo: simplify pub details
-  // todo: simplify taps details
   public async getPubDetails(
     cityName: string,
     pubName: string,
   ): Promise<PubWithTaps> {
-    const pub = await this.getPubsInCityFull(cityName).then((pubs) =>
+    const pub = await this.getPubsInCity(cityName).then((pubs) =>
       pubs.find((pub) => pub.name === pubName),
     );
 
@@ -152,7 +148,7 @@ export class OnTapService {
   }
 
   public async getPubByName(cityName: string, pubName: string): Promise<Pub> {
-    const pub = await this.getPubsInCityFull(cityName).then((pubs) =>
+    const pub = await this.getPubsInCity(cityName).then((pubs) =>
       pubs.find((pub) => pub.name === pubName),
     );
 
@@ -187,7 +183,7 @@ export class OnTapService {
   public getBeers = async (
     filter: BeersFilters,
   ): Promise<BeerFilterResult2> => {
-    const pubsInCity = await this.getPubsInCityFull(filter.cityName);
+    const pubsInCity = await this.getPubsInCity(filter.cityName);
 
     const pubsWithTapsInCity = (
       await Promise.all(

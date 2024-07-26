@@ -129,12 +129,12 @@ export class Agent extends EventEmitter {
         functionResult = await onTap.getCitiesNames();
       }
 
-      if (functionName === "getPubsInCity") {
+      if (functionName === "getPubNamesInCity") {
         const args = JSON.parse(functionArgs) as {
           cityName: string;
         };
 
-        functionResult = await onTap.getPubsInCity(args.cityName);
+        functionResult = await onTap.getPubNamesInCity(args.cityName);
       }
 
       if (functionName === "getPubDetails") {
@@ -201,7 +201,7 @@ export class Agent extends EventEmitter {
 
     oaiStream.on("textDone", () => {
       this.logger.info({
-        msg: `assistant: ${fullMsgText.slice(0, 100)}`,
+        msg: `assistant: ${fullMsgText.length > 100 ? fullMsgText.slice(0, 100) + "..." : fullMsgText}`,
         response: fullMsgText,
         duration: Date.now() - start,
         type: "textDone",

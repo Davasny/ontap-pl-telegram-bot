@@ -96,7 +96,9 @@ export type BeerFilterResultSortBy =
   | "ratingAsc"
   | "ratingDesc"
   | "alcoholToPriceRatioAsc"
-  | "alcoholToPriceRatioDesc";
+  | "alcoholToPriceRatioDesc"
+  | "alcoholAbvAsc"
+  | "alcoholAbvDesc";
 
 export interface BeerFilterResultPub {
   pubName: string;
