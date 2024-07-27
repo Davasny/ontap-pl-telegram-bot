@@ -217,7 +217,9 @@ export class OnTapService {
     const filteredPubsByName = pubsWithTapsInCity.filter(
       (pub) =>
         !filter.pubNameRegex ||
-        new RegExp(filter.pubNameRegex).test(pub.pub.name.toLowerCase()),
+        new RegExp(filter.pubNameRegex.toLowerCase()).test(
+          pub.pub.name.toLowerCase(),
+        ),
     );
 
     for (const pubWithTaps of filteredPubsByName) {
@@ -258,13 +260,15 @@ export class OnTapService {
     const filterByStyleRegex = (beer: BeerWithTaps): boolean =>
       !filter.lowerCaseStyleRegex ||
       (beer.style
-        ? new RegExp(filter.lowerCaseStyleRegex).test(beer.style.toLowerCase())
+        ? new RegExp(filter.lowerCaseStyleRegex.toLowerCase()).test(
+            beer.style.toLowerCase(),
+          )
         : false);
 
     const filterByBeerNameRegex = (beer: BeerWithTaps): boolean =>
       !filter.lowerCaseBeerNameRegex ||
       (beer.name
-        ? new RegExp(filter.lowerCaseBeerNameRegex).test(
+        ? new RegExp(filter.lowerCaseBeerNameRegex.toLowerCase()).test(
             beer.name.toLowerCase(),
           )
         : false);
