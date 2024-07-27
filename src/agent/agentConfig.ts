@@ -93,44 +93,63 @@ Your goal is to meet the following requirements:
         parameters: {
           type: "object",
           properties: {
-            cityName: {
+            filter: {
+              type: "object",
+              description: "Filter beers by properties",
+              properties: {
+                cityName: {
+                  type: "string",
+                  description: "Name of the city",
+                },
+                limitBeers: {
+                  type: "number",
+                  description: "Specify how much beers will be returned",
+                },
+                lowerCaseStyleRegex: {
+                  type: "string",
+                  description:
+                    "lowercase written regex for matching beer style",
+                },
+                lowerCaseBeerNameRegex: {
+                  type: "string",
+                  description: "lowercase written regex for matching beer name",
+                },
+                priceFrom: {
+                  type: "number",
+                  description: "Price from in PLN",
+                },
+                priceTo: {
+                  type: "number",
+                  description: "Price to in PLN",
+                },
+                abvFrom: {
+                  type: "number",
+                  description: "Alcohol abv from in %",
+                },
+                abvTo: {
+                  type: "number",
+                  description: "Alcohol abv to in %",
+                },
+                pubNameRegex: {
+                  type: "string",
+                  description: "lowercase written regex for matching pub name",
+                },
+              },
+            },
+            sortBy: {
               type: "string",
-              description: "Name of the city",
-            },
-            limitBeers: {
-              type: "number",
-              description: "Specify how much beers will be returned",
-            },
-            lowerCaseStyleRegex: {
-              type: "string",
-              description: "lowercase written regex for matching beer style",
-            },
-            lowerCaseBeerNameRegex: {
-              type: "string",
-              description: "lowercase written regex for matching beer name",
-            },
-            priceFrom: {
-              type: "number",
-              description: "Price from in PLN",
-            },
-            priceTo: {
-              type: "number",
-              description: "Price to in PLN",
-            },
-            abvFrom: {
-              type: "number",
-              description: "Alcohol abv from in %",
-            },
-            abvTo: {
-              type: "number",
-              description: "Alcohol abv to in %",
-            },
-            pubNameRegex: {
-              type: "string",
-              description: "lowercase written regex for matching pub name",
+              description: "Sort beers by property",
+              enum: [
+                "priceAsc",
+                "priceDesc",
+                "alcoholToPriceRatioAsc",
+                "alcoholToPriceRatioDesc",
+                "alcoholAbvAsc",
+                "alcoholAbvDesc",
+              ],
             },
           },
-          required: ["cityName", "limitBeers"],
+          required: ["filter.cityName", "sortBy"],
         },
       },
     },

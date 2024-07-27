@@ -93,8 +93,6 @@ export interface BeersFilters {
 export type BeerFilterResultSortBy =
   | "priceAsc"
   | "priceDesc"
-  | "ratingAsc"
-  | "ratingDesc"
   | "alcoholToPriceRatioAsc"
   | "alcoholToPriceRatioDesc"
   | "alcoholAbvAsc"

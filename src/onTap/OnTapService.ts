@@ -1,6 +1,7 @@
 import {
   BeerFilterResult,
   BeerFilterResult2,
+  BeerFilterResultSortBy,
   BeerId,
   BeersFilters,
   BeerWithTaps,
@@ -135,11 +136,14 @@ export class OnTapService {
       throw new Error(`Pub "${pubName}" not found`);
     }
 
-    const beers = await this.getBeers({
-      cityName: cityName,
-      pubNameRegex: pub.name.toLowerCase(),
-      limitBeers: 100,
-    });
+    const beers = await this.getBeers(
+      {
+        cityName: cityName,
+        pubNameRegex: pub.name.toLowerCase(),
+        limitBeers: 100,
+      },
+      "priceAsc",
+    );
 
     return {
       ...pub,
@@ -179,9 +183,9 @@ export class OnTapService {
     return `https://www.google.com/maps/search/?${urlParams.toString()}`;
   };
 
-  // todo: handle sorting
   public getBeers = async (
     filter: BeersFilters,
+    sort: BeerFilterResultSortBy,
   ): Promise<BeerFilterResult2> => {
     const pubsInCity = await this.getPubsInCity(filter.cityName);
 
@@ -291,8 +295,59 @@ export class OnTapService {
       .filter(filterByHigherAbv)
       .filter(filterByBeerNameRegex);
 
-    const simplifiedBeers: BeerFilterResult[] =
-      filteredBeers.map(getSimpleBeer);
+    let sortedBeers = [];
+    switch (sort) {
+      case "alcoholAbvAsc":
+        sortedBeers = filteredBeers.sort(
+          (a, b) =>
+            (a.abv && b.abv && parseFloat(a.abv) - parseFloat(b.abv)) || 0,
+        );
+        break;
+      case "alcoholAbvDesc":
+        sortedBeers = filteredBeers.sort(
+          (a, b) =>
+            (b.abv && a.abv && parseFloat(b.abv) - parseFloat(a.abv)) || 0,
+        );
+        break;
+      case "alcoholToPriceRatioAsc":
+        sortedBeers = filteredBeers.sort(
+          (a, b) =>
+            (a.taps[0].alcoholToPriceRatio &&
+              b.taps[0].alcoholToPriceRatio &&
+              a.taps[0].alcoholToPriceRatio - b.taps[0].alcoholToPriceRatio) ||
+            0,
+        );
+        break;
+      case "alcoholToPriceRatioDesc":
+        sortedBeers = filteredBeers.sort(
+          (a, b) =>
+            (b.taps[0].alcoholToPriceRatio &&
+              a.taps[0].alcoholToPriceRatio &&
+              b.taps[0].alcoholToPriceRatio - a.taps[0].alcoholToPriceRatio) ||
+            0,
+        );
+        break;
+      case "priceAsc":
+        sortedBeers = filteredBeers.sort(
+          (a, b) =>
+            (a.taps[0].halfLiterPrice &&
+              b.taps[0].halfLiterPrice &&
+              a.taps[0].halfLiterPrice - b.taps[0].halfLiterPrice) ||
+            0,
+        );
+        break;
+      case "priceDesc":
+        sortedBeers = filteredBeers.sort(
+          (a, b) =>
+            (b.taps[0].halfLiterPrice &&
+              a.taps[0].halfLiterPrice &&
+              b.taps[0].halfLiterPrice - a.taps[0].halfLiterPrice) ||
+            0,
+        );
+        break;
+    }
+
+    const simplifiedBeers: BeerFilterResult[] = sortedBeers.map(getSimpleBeer);
 
     return {
       beers: simplifiedBeers.slice(0, filter.limitBeers),

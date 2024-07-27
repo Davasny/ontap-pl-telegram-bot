@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { OnTapService } from "../onTap/OnTapService";
 import Keyv from "keyv";
-import { BeersFilters } from "../types/types";
+import { BeerFilterResultSortBy, BeersFilters } from "../types/types";
 import {
   RequiredActionFunctionToolCall,
   RunSubmitToolOutputsParams,
@@ -163,8 +163,12 @@ export class Agent extends EventEmitter {
       }
 
       if (functionName === "getBeers") {
-        const args = JSON.parse(functionArgs) as BeersFilters;
-        const fullResult = await onTap.getBeers(args);
+        const args = JSON.parse(functionArgs) as {
+          filter: BeersFilters;
+          sortBy: BeerFilterResultSortBy;
+        };
+
+        const fullResult = await onTap.getBeers(args.filter, args.sortBy);
         functionResult = getSimplifiedBeersList(fullResult);
       }
     } catch (e) {
