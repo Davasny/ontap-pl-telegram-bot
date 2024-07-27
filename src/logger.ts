@@ -4,6 +4,7 @@ import {
   getPinoTransport,
   initSDK,
 } from "@hyperdx/node-opentelemetry";
+import "dotenv/config";
 
 initSDK({
   service: "ontap-bot",
@@ -26,5 +27,5 @@ export const logger = Pino({
       }),
     ],
   },
-  level: "info",
+  level: "debug",
 });

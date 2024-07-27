@@ -6,6 +6,7 @@ import {
 } from "wretch";
 
 import { LRUCache } from "lru-cache";
+import { logger } from "../logger";
 
 export const WretchLruMiddleware = (
   lruOptions: LRUCache.Options<string, WretchResponse, unknown>,
@@ -19,11 +20,13 @@ export const WretchLruMiddleware = (
     ): Promise<WretchResponse> => {
       const cachedResponse = cache.get(url);
       if (cachedResponse) {
+        logger.debug(`Cache hit for ${url}`);
         return cachedResponse.clone();
       }
 
       const response = await next(url, opts);
       if (response.ok) {
+        logger.debug(`Cache miss for ${url}`);
         cache.set(url, response.clone());
       }
 
