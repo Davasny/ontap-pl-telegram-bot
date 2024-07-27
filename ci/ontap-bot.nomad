@@ -31,7 +31,7 @@ variable "hyperdx_api_key" {
 }
 
 job "ontap-bot" {
-  type = "service"
+  type        = "service"
   datacenters = ["*"]
 
   namespace = "ontap"
@@ -53,7 +53,7 @@ job "ontap-bot" {
         ONTAP_API_KEY        = var.ontap_api_key
         TELEGRAM_BOT_TOKEN   = var.telegram_bot_token
         OPENAI_API_KEY       = var.openai_api_key
-        HYPERDX_API_KEY = var.hyperdx_api_key
+        HYPERDX_API_KEY      = var.hyperdx_api_key
         PERSISTENT_DATA_PATH = "/data"
       }
 
