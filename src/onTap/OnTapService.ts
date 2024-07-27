@@ -9,13 +9,14 @@ import {
   Pub,
   PubWithTaps,
   Tap,
+  TapParsed,
   TapWithPub,
 } from "../types/types";
 import { ALCOHOL_DESTINY_G_ML, LRU_CACHE_TTL } from "../consts";
 import wretch, { Wretch } from "wretch";
 import { WretchLruMiddleware } from "../cache/WretchLruMiddleware";
 import "dotenv/config";
-import { getSimpleBeer } from "./getSimplifiedBeersList";
+import { getSimpleBeer } from "./getSimpleBeer";
 
 export class OnTapService {
   private static instance: OnTapService;
@@ -48,7 +49,7 @@ export class OnTapService {
     return OnTapService.instance;
   }
 
-  private static getHalfLiterPrice = (tap: Tap): number | null => {
+  private static getHalfLiterPrice = (tap: TapParsed): number | null => {
     const halfLiterVariant = tap.variants.find((v) => v.volume === "0.5l");
     if (halfLiterVariant) {
       return Math.round(halfLiterVariant.price / 100);
@@ -84,8 +85,8 @@ export class OnTapService {
     return abvNumber;
   };
 
-  private static getAlcoholWeight = (tap: Tap): number | null => {
-    const abv = this.parseAbv(tap.beer?.abv);
+  private static getAlcoholWeight = (tap: TapParsed): number | null => {
+    const abv = tap.beer?.abv;
     if (!abv) {
       return null;
     }
@@ -165,11 +166,23 @@ export class OnTapService {
     return pub;
   }
 
-  public async getTapsInPub(pubId: string): Promise<Tap[]> {
+  public async getTapsInPub(pubId: string): Promise<TapParsed[]> {
+    // parse abv to number
     return await this.onTapApiClient
       .url(`/pubs/${pubId}/taps`)
       .get()
-      .json<Tap[]>();
+      .json<Tap[]>()
+      .then((taps) =>
+        taps.map((tap) => ({
+          ...tap,
+          beer: tap.beer
+            ? {
+                ...tap.beer,
+                abv: OnTapService.parseAbv(tap.beer.abv),
+              }
+            : tap.beer,
+        })),
+      );
   }
 
   public getGoogleMapsUrl = async (
@@ -257,7 +270,7 @@ export class OnTapService {
         : false);
 
     const filterByLowerPrice = (beer: BeerWithTaps): boolean =>
-      !filter.priceFrom ||
+      filter.priceFrom === undefined ||
       (filter.priceFrom
         ? beer.taps.some((tap) =>
             tap.halfLiterPrice
@@ -268,7 +281,7 @@ export class OnTapService {
         : false);
 
     const filterByHigherPrice = (beer: BeerWithTaps): boolean =>
-      !filter.priceTo ||
+      filter.priceTo === undefined ||
       (filter.priceTo
         ? beer.taps.some((tap) =>
             tap.halfLiterPrice
@@ -278,16 +291,12 @@ export class OnTapService {
         : false);
 
     const filterByLowerAbv = (beer: BeerWithTaps): boolean =>
-      !filter.abvFrom ||
-      (beer.abv && filter.abvFrom
-        ? parseFloat(beer.abv) >= (filter.abvFrom ? filter.abvFrom : 9999)
-        : false);
+      filter.abvFrom === undefined ||
+      (beer.abv !== null ? beer.abv >= filter.abvFrom : false);
 
     const filterByHigherAbv = (beer: BeerWithTaps): boolean =>
-      !filter.abvTo ||
-      (beer.abv && filter.abvTo
-        ? parseFloat(beer.abv) <= (filter.abvTo ? filter.abvTo : 0)
-        : false);
+      filter.abvTo === undefined ||
+      (beer.abv !== null ? beer.abv <= filter.abvTo : false);
 
     const filteredBeers = beers
       .filter(filterByStyleRegex)
@@ -301,14 +310,12 @@ export class OnTapService {
     switch (sort) {
       case "alcoholAbvAsc":
         sortedBeers = filteredBeers.sort(
-          (a, b) =>
-            (a.abv && b.abv && parseFloat(a.abv) - parseFloat(b.abv)) || 0,
+          (a, b) => (a.abv && b.abv && a.abv - b.abv) || 0,
         );
         break;
       case "alcoholAbvDesc":
         sortedBeers = filteredBeers.sort(
-          (a, b) =>
-            (b.abv && a.abv && parseFloat(b.abv) - parseFloat(a.abv)) || 0,
+          (a, b) => (b.abv && a.abv && b.abv - a.abv) || 0,
         );
         break;
       case "alcoholToPriceRatioAsc":
@@ -353,7 +360,6 @@ export class OnTapService {
 
     return {
       beers: simplifiedBeers.slice(0, filter.limitBeers),
-      total: filteredBeers.length,
     };
   };
 }

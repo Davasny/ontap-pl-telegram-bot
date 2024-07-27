@@ -13,7 +13,8 @@ import { AssistantStream } from "openai/lib/AssistantStream";
 import { assistantConfig } from "./agentConfig";
 import type Pino from "pino";
 import { IUserMessagePayload } from "../types/events";
-import { getSimplifiedBeersList } from "../onTap/getSimplifiedBeersList";
+
+import { formatBeersToCsv } from "./formatBeersToCsv";
 
 const onTap = OnTapService.getInstance();
 
@@ -42,7 +43,9 @@ export class Agent extends EventEmitter {
   }
 
   private async getThreadId(userId: string): Promise<string> {
-    let threadId = await keyv.get(`threadId-${userId}`);
+    const assistantId = await this.getAssistantId();
+    let threadId = await keyv.get(`threadId-${assistantId}-${userId}`);
+
     if (!threadId) {
       threadId = await this.openai.beta.threads
         .create()
@@ -166,10 +169,19 @@ export class Agent extends EventEmitter {
         const args = JSON.parse(functionArgs) as {
           filter: BeersFilters;
           sortBy: BeerFilterResultSortBy;
+          cityName: string;
+          limitBeers: number;
         };
 
-        const fullResult = await onTap.getBeers(args.filter, args.sortBy);
-        functionResult = getSimplifiedBeersList(fullResult);
+        const beersObject = await onTap.getBeers(
+          {
+            ...args.filter,
+            cityName: args.cityName,
+            limitBeers: args.limitBeers,
+          },
+          args.sortBy,
+        );
+        functionResult = formatBeersToCsv(beersObject.beers);
       }
     } catch (e) {
       functionResult = `Exception occurred: ${e}`;

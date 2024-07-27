@@ -6,16 +6,16 @@ export const assistantConfig: AssistantCreateParams = {
   instructions: `
 You are an assistant helping users find information about pubs and beers in city.
 Your goal is to meet the following requirements:
-- always ask about user's city
+- return plain text without bold formatting
+- always look for information according to user's city
+- ask user if you don't know the city
+- deduplicate information about pubs and beers
 - you cannot use knowledge other than provided by the system
-- never use markdown
 - translate text into Polish
-- if you don't know something, tell the user
-- list elements separated by commas
-- never ask user if they need more help
+- if you don't know answer, tell the user
 - when describing beers, provide only alcohol percentage without "alkohol" word, and price in "zł"
 - when using functions, provide correct full name of city
-- never pass phone numbers
+- never pass phone numbers or any personal data
 `,
   tools: [
     {
@@ -97,14 +97,6 @@ Your goal is to meet the following requirements:
               type: "object",
               description: "Filter beers by properties",
               properties: {
-                cityName: {
-                  type: "string",
-                  description: "Name of the city",
-                },
-                limitBeers: {
-                  type: "number",
-                  description: "Specify how much beers will be returned",
-                },
                 lowerCaseStyleRegex: {
                   type: "string",
                   description:
@@ -148,8 +140,15 @@ Your goal is to meet the following requirements:
                 "alcoholAbvDesc",
               ],
             },
+            cityName: {
+              type: "string",
+            },
+            limitBeers: {
+              type: "number",
+              description: "Limit number of beers returned",
+            },
           },
-          required: ["filter.cityName", "sortBy"],
+          required: ["cityName", "sortBy", "limitBeers"],
         },
       },
     },

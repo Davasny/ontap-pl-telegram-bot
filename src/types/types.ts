@@ -132,5 +132,4 @@ export interface BeerFilterResult {
 
 export interface BeerFilterResult2 {
   beers: BeerFilterResult[];
-  total: number;
 }

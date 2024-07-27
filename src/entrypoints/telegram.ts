@@ -84,7 +84,7 @@ const main = async () => {
     agent.emit("userMessage", payload);
   });
 
-  logger.info("Starting bot");
+  logger.info("system: starting bot");
   await bot.start();
 };
 
