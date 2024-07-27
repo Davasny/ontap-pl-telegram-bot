@@ -82,7 +82,7 @@ const main = async () => {
       userId: ctx.from?.id || 0,
       username,
       msgId: msgId,
-      message: `Cześć! Jestem nowym użytkownikiem o nicku ${username}. Powiedz mi o sobie`,
+      message: `Cześć! Jestem nowym użytkownikiem o nicku "${username}". Opowiedz mi o sobie, uwzględnij mój nick w odpowiedzi.`,
     });
   });
 
