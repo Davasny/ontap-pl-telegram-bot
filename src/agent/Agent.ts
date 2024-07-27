@@ -44,18 +44,20 @@ export class Agent extends EventEmitter {
 
   private async getThreadId(userId: string): Promise<string> {
     const assistantId = await this.getAssistantId();
-    let threadId = await keyv.get(`threadId-${assistantId}-${userId}`);
+    const keyvThreadKey = `threadId-${assistantId}-${userId}`;
+    let threadId = await keyv.get(keyvThreadKey);
 
     if (!threadId) {
       threadId = await this.openai.beta.threads
         .create()
         .then((thread) => thread.id);
 
-      await keyv.set(`threadId-${userId}`, threadId);
+      await keyv.set(keyvThreadKey, threadId);
 
       this.logger.info({
         msg: `system: created new thread ${threadId}`,
         threadId,
+        keyvThreadKey,
       });
     }
 
