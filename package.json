@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "cli": "tsx src/entrypoints/cli.ts",
+    "test": "vitest --run",
     "build": "tsc -p tsconfig.json",
     "telegram": "tsx src/entrypoints/telegram.ts",
     "telegram:prod": "pm2-runtime dist/entrypoints/telegram.js"
@@ -29,6 +30,7 @@
     "prettier": "3.3.3",
     "tsx": "4.16.2",
     "typescript": "5.5.3",
+    "vitest": "2.0.4",
     "wretch": "2.9.0"
   }
 }

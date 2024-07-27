@@ -69,12 +69,14 @@ export class OnTapService {
     return null;
   };
 
-  private static parseAbv = (abv: string | null | undefined): number | null => {
+  public static parseAbv = (abv: string | null | undefined): number | null => {
     if (!abv) {
       return null;
     }
 
-    const abvNumber = parseFloat(abv.replace(",", ".").replace("%", ""));
+    const abvNumber = parseFloat(
+      abv.replace(",", ".").replace("%", "").replace("<", ""),
+    );
     if (isNaN(abvNumber)) {
       return null;
     }

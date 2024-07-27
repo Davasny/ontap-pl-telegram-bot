@@ -57,7 +57,19 @@ export interface Tap {
   volumes: string | null;
 }
 
-export interface TapWithPub extends Tap {
+// Utility type to transform Beer.abv from string | null to number | null
+type TransformAbv<T extends { abv: any }> = Omit<T, "abv"> & {
+  abv: number | null;
+};
+
+export type BeerParsed = TransformAbv<Beer>;
+
+// Define TapParsed using the utility type
+export interface TapParsed extends Omit<Tap, "beer"> {
+  beer: BeerParsed | null;
+}
+
+export interface TapWithPub extends TapParsed {
   pub: Pub;
   halfLiterPrice: number | null;
   halfLiterAlcoholWeight: number | null;
@@ -73,7 +85,7 @@ export interface PubWithTaps extends Pub {
   beers: BeerFilterResult[];
 }
 
-export interface BeerWithTaps extends Beer {
+export interface BeerWithTaps extends BeerParsed {
   taps: TapWithPub[];
 }
 
@@ -104,8 +116,8 @@ export interface BeerFilterResultPub {
 }
 
 export interface BeerFilterResult {
-  beerName: Beer["name"];
-  beerStyle: Beer["style"];
+  beerName: BeerParsed["name"];
+  beerStyle: BeerParsed["style"];
   /**
    * should be used as reference for getting beer details
    */
@@ -115,7 +127,7 @@ export interface BeerFilterResult {
    */
   pubs: BeerFilterResultPub[];
 
-  abv: Beer["abv"];
+  abv: BeerParsed["abv"];
 }
 
 export interface BeerFilterResult2 {
