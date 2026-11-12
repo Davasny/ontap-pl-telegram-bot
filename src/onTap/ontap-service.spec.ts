@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { OntapService } from "./ontap-service";
+import exp from "constants";
 
 describe("OntapService.parseAbv", () => {
   const cases: { input: string | null; expected: number | null }[] = [
@@ -16,5 +17,16 @@ describe("OntapService.parseAbv", () => {
       const result = OntapService.parseAbv(input);
       expect(result).toBe(expected);
     });
+  });
+});
+
+describe("Check ontap api", async () => {
+  it("returns cities", async () => {
+    const onTap = new OntapService();
+    const cities = await onTap.getCities();
+
+    expect(cities).toBeDefined();
+    expect(cities.length).toBeGreaterThan(0);
+    expect(cities.map((c) => c.name)).toContain("Kraków");
   });
 });
