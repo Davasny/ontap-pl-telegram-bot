@@ -1,22 +1,22 @@
 import OpenAI from "openai";
-import { OnTapService } from "../onTap/OnTapService";
+import { OntapService } from "../onTap/ontap-service";
 import Keyv from "keyv";
 import { BeerFilterResultSortBy, BeersFilters } from "../types/types";
 import {
   RequiredActionFunctionToolCall,
   RunSubmitToolOutputsParams,
 } from "openai/src/resources/beta/threads/runs/runs";
-import { generateHash } from "../utils/generateHash";
+import { generateHash } from "../utils/generate-hash";
 import "dotenv/config";
 import { EventEmitter } from "events";
 import { AssistantStream } from "openai/lib/AssistantStream";
-import { assistantConfig } from "./agentConfig";
+import { assistantConfig } from "./agent-config";
 import type Pino from "pino";
 import { IUserMessagePayload } from "../types/events";
 
-import { formatBeersToCsv } from "./formatBeersToCsv";
+import { formatBeersToCsv } from "./format-beers-to-csv";
 
-const onTap = OnTapService.getInstance();
+const onTap = OntapService.getInstance();
 
 const persistentDataPath = process.env.PERSISTENT_DATA_PATH || ".";
 const keyv = new Keyv(`sqlite://${persistentDataPath}/db.sqlite`);

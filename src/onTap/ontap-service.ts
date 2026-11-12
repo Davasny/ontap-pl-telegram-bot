@@ -14,12 +14,12 @@ import {
 } from "../types/types";
 import { ALCOHOL_DESTINY_G_ML, LRU_CACHE_TTL } from "../consts";
 import wretch, { Wretch } from "wretch";
-import { WretchLruMiddleware } from "../cache/WretchLruMiddleware";
+import { WretchLruMiddleware } from "../cache/wretch-lru-middleware";
 import "dotenv/config";
-import { getSimpleBeer } from "./getSimpleBeer";
+import { getSimpleBeer } from "./get-simple-beer";
 
-export class OnTapService {
-  private static instance: OnTapService;
+export class OntapService {
+  private static instance: OntapService;
 
   private onTapApiClient: Wretch;
 
@@ -41,12 +41,12 @@ export class OnTapService {
       ]);
   }
 
-  public static getInstance(): OnTapService {
-    if (!OnTapService.instance) {
-      OnTapService.instance = new OnTapService();
+  public static getInstance(): OntapService {
+    if (!OntapService.instance) {
+      OntapService.instance = new OntapService();
     }
 
-    return OnTapService.instance;
+    return OntapService.instance;
   }
 
   private static getHalfLiterPrice = (tap: TapParsed): number | null => {
@@ -178,7 +178,7 @@ export class OnTapService {
           beer: tap.beer
             ? {
                 ...tap.beer,
-                abv: OnTapService.parseAbv(tap.beer.abv),
+                abv: OntapService.parseAbv(tap.beer.abv),
               }
             : tap.beer,
         })),
@@ -224,8 +224,8 @@ export class OnTapService {
 
     for (const pubWithTaps of filteredPubsByName) {
       for (const tap of pubWithTaps.taps) {
-        const halfLiterPrice = OnTapService.getHalfLiterPrice(tap);
-        const halfLiterAlcoholWeight = OnTapService.getAlcoholWeight(tap);
+        const halfLiterPrice = OntapService.getHalfLiterPrice(tap);
+        const halfLiterAlcoholWeight = OntapService.getAlcoholWeight(tap);
         const alcoholToPriceRatio =
           halfLiterAlcoholWeight && halfLiterPrice
             ? halfLiterAlcoholWeight / halfLiterPrice

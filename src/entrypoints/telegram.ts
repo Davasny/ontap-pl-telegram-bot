@@ -1,5 +1,5 @@
 import { Bot } from "grammy";
-import { Agent } from "../agent/Agent";
+import { Agent } from "../agent/agent";
 import { debounce } from "../utils/debounce";
 import { logger } from "../logger";
 import { WELCOME_MESSAGE } from "../consts";

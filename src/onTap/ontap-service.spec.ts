@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { OnTapService } from "./OnTapService";
+import { OntapService } from "./ontap-service";
 
-describe("OnTapService.parseAbv", () => {
+describe("OntapService.parseAbv", () => {
   const cases: { input: string | null; expected: number | null }[] = [
     { input: "4.5", expected: 4.5 },
     { input: "4.5%", expected: 4.5 },
@@ -13,7 +13,7 @@ describe("OnTapService.parseAbv", () => {
 
   cases.forEach(({ input, expected }) => {
     it(`${input} should return ${expected}`, () => {
-      const result = OnTapService.parseAbv(input);
+      const result = OntapService.parseAbv(input);
       expect(result).toBe(expected);
     });
   });

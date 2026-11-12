@@ -1,5 +1,5 @@
 import * as readline from "readline";
-import { Agent } from "../agent/Agent";
+import { Agent } from "../agent/agent";
 import { WELCOME_MESSAGE } from "../consts";
 import { logger } from "../logger";
 import { IUserMessagePayload } from "../types/events";
