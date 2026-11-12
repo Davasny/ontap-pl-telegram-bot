@@ -14,7 +14,6 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@hyperdx/node-opentelemetry": "0.8.0",
     "@keyv/sqlite": "3.6.7",
     "@types/crypto-js": "4.2.2",
     "@types/node": "20.14.11",
@@ -32,5 +31,6 @@
     "typescript": "5.5.3",
     "vitest": "2.0.4",
     "wretch": "2.9.0"
-  }
+  },
+  "packageManager": "pnpm@10.18.2+sha512.9fb969fa749b3ade6035e0f109f0b8a60b5d08a1a87fdf72e337da90dcc93336e2280ca4e44f2358a649b83c17959e9993e777c2080879f3801e6f0d999ad3dd"
 }

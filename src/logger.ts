@@ -1,18 +1,7 @@
 import Pino from "pino";
-import {
-  getPinoMixinFunction,
-  getPinoTransport,
-  initSDK,
-} from "@hyperdx/node-opentelemetry";
 import "dotenv/config";
 
-initSDK({
-  service: "ontap-bot",
-  consoleCapture: false,
-});
-
 export const logger = Pino({
-  mixin: getPinoMixinFunction,
   transport: {
     targets: [
       {
@@ -22,9 +11,6 @@ export const logger = Pino({
           ignore: "pid,hostname",
         },
       },
-      getPinoTransport("debug", {
-        detectResources: false,
-      }),
     ],
   },
   level: "debug",
