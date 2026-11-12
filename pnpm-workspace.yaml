@@ -1,5 +1,5 @@
 allowBuilds:
   esbuild: false
-  sqlite3: false
+  sqlite3: true
 minimumReleaseAgeExclude:
   - openai@7.56.0
