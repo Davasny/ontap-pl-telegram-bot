@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import { OntapService } from "../onTap/ontap-service";
 import Keyv from "keyv";
-import { BeerFilterResultSortBy, BeersFilters } from "../types/types";
 import {
   ResponseFunctionToolCall,
   ResponseInput,
@@ -13,7 +12,8 @@ import { agentConfig } from "./agent-config";
 import type Pino from "pino";
 import { IUserMessagePayload } from "../types/events";
 
-import { formatBeersToCsv } from "./format-beers-to-csv";
+import { executeTool } from "./execute-tool";
+import { getToolCacheKey } from "./get-tool-cache-key";
 
 const onTap = OntapService.getInstance();
 
@@ -78,96 +78,50 @@ export class Agent extends EventEmitter {
 
   private handleFunctionCall = async (
     toolCall: ResponseFunctionToolCall,
+    cache: Map<string, Promise<string>>,
   ): Promise<ResponseInputItem.FunctionCallOutput> => {
-    const functionName = toolCall.name;
-    const functionArgs = toolCall.arguments || "{}";
-
-    this.logger.info({
-      msg: `assistant: functionCall ${functionName}`,
-      functionName,
-      functionArgs,
-      type: "functionCall",
-    });
-
-    let functionResult: string | string[] = `Unknown function ${functionName}`;
-
-    try {
-      if (functionName === "getCitiesNames") {
-        functionResult = await onTap.getCitiesNames();
-      }
-
-      if (functionName === "getPubNamesInCity") {
-        const args = JSON.parse(functionArgs) as {
-          cityName: string;
-        };
-
-        functionResult = await onTap.getPubNamesInCity(args.cityName);
-      }
-
-      if (functionName === "getPubDetails") {
-        const args = JSON.parse(functionArgs) as {
-          cityName: string;
-          pubName: string;
-        };
-
-        const functionResultObject = await onTap.getPubDetails(
-          args.cityName,
-          args.pubName,
-        );
-        functionResult = JSON.stringify(functionResultObject);
-      }
-
-      if (functionName === "getGoogleMapsUrl") {
-        const args = JSON.parse(functionArgs) as {
-          cityName: string;
-          pubName: string;
-        };
-
-        functionResult = await onTap.getGoogleMapsUrl(
-          args.cityName,
-          args.pubName,
-        );
-      }
-
-      if (functionName === "getBeers") {
-        const args = JSON.parse(functionArgs) as {
-          filter: BeersFilters;
-          sortBy: BeerFilterResultSortBy;
-          cityName: string;
-          limitBeers: number;
-        };
-
-        const beersObject = await onTap.getBeers(
-          {
-            ...args.filter,
-            cityName: args.cityName,
-            limitBeers: args.limitBeers,
-          },
-          args.sortBy,
-        );
-        functionResult = formatBeersToCsv(beersObject.beers);
-      }
-    } catch (e) {
-      functionResult = `Exception occurred: ${e}`;
-      if (e instanceof Error) {
-        functionResult = `Exception occurred: ${e.message}`;
-      }
+    const key = getToolCacheKey(toolCall.name, toolCall.arguments);
+    let output = cache.get(key);
+    const cached = Boolean(output);
+    this.logger.debug(
+      {
+        functionName: toolCall.name,
+        functionArgs: toolCall.arguments,
+        callId: toolCall.call_id,
+        cached,
+        type: "functionCall",
+      },
+      "Tool call",
+    );
+    if (!output) {
+      output = executeTool(onTap, toolCall.name, toolCall.arguments)
+        .then((result) => JSON.stringify(result))
+        .catch((error: unknown) => {
+          this.logger.error(
+            { err: error, functionName: toolCall.name },
+            "Tool failed",
+          );
+          return JSON.stringify({
+            status: "tool_error",
+            message:
+              "Unable to retrieve data. Do not infer that the pub or beer is absent. Ask the user to retry.",
+          });
+        });
+      cache.set(key, output);
     }
 
-    this.logger.info({
-      msg: `system: functionResult ${functionName}`,
-      functionName,
-      functionArgs,
-      functionResult,
-      type: "functionResult",
-    });
-
+    this.logger.info(
+      {
+        functionName: toolCall.name,
+        cached,
+        type: "functionResult",
+      },
+      "Tool result ready",
+    );
     return {
       type: "function_call_output",
       call_id: toolCall.call_id,
-      output: Array.isArray(functionResult)
-        ? functionResult.join(", ")
-        : functionResult,
+      output: await output,
     };
   };
 
@@ -175,6 +129,9 @@ export class Agent extends EventEmitter {
     const conversation = await this.getConversationId();
     let input: ResponseInput = [{ role: "user", content: message }];
     let fullMsgText = "";
+    const toolCache = new Map<string, Promise<string>>();
+    let finalize = false;
+    let toolRounds = 0;
 
     while (true) {
       const stream = await this.openai.responses.create({
@@ -183,6 +140,7 @@ export class Agent extends EventEmitter {
         input,
         store: true,
         stream: true,
+        tool_choice: finalize ? "none" : "auto",
       });
       const toolCalls: ResponseFunctionToolCall[] = [];
       let completed = false;
@@ -231,7 +189,15 @@ export class Agent extends EventEmitter {
         return;
       }
 
-      input = await Promise.all(toolCalls.map(this.handleFunctionCall));
+      if (finalize) throw new Error("Model exceeded the tool-call limit");
+      const repeatedRound = toolCalls.every((call) =>
+        toolCache.has(getToolCacheKey(call.name, call.arguments)),
+      );
+      input = await Promise.all(
+        toolCalls.map((call) => this.handleFunctionCall(call, toolCache)),
+      );
+      toolRounds++;
+      finalize = repeatedRound || toolRounds >= 6;
     }
   }
 }

@@ -58,7 +58,7 @@ export interface Tap {
 }
 
 // Utility type to transform Beer.abv from string | null to number | null
-type TransformAbv<T extends { abv: any }> = Omit<T, "abv"> & {
+type TransformAbv<T extends { abv: unknown }> = Omit<T, "abv"> & {
   abv: number | null;
 };
 
@@ -81,10 +81,6 @@ export interface TapWithPub extends TapParsed {
   alcoholToPriceRatio: number | null;
 }
 
-export interface PubWithTaps extends Pub {
-  beers: BeerFilterResult[];
-}
-
 export interface BeerWithTaps extends BeerParsed {
   taps: TapWithPub[];
 }
@@ -95,7 +91,7 @@ export interface BeersFilters {
 
   lowerCaseStyleRegex?: string;
   lowerCaseBeerNameRegex?: string;
-  pubNameRegex?: string;
+  pubId?: string;
   priceFrom?: number;
   priceTo?: number;
   abvFrom?: number;
@@ -111,8 +107,9 @@ export type BeerFilterResultSortBy =
   | "alcoholAbvDesc";
 
 export interface BeerFilterResultPub {
-  pubName: string;
-  halfLiterPrice: number | null;
+  pubId: string;
+  normalizedHalfLiterPricePln: number | null;
+  servings: { volume: string; pricePln: number }[];
 }
 
 export interface BeerFilterResult {
@@ -131,5 +128,12 @@ export interface BeerFilterResult {
 }
 
 export interface BeerFilterResult2 {
+  status: "ok" | "pub_not_found" | "no_active_taps" | "no_matching_beers";
+  currency: "PLN";
+  priceBasis: "normalized_0.5l";
+  pubs: Pick<Pub, "id" | "name" | "address">[];
+  total: number;
+  returned: number;
+  truncated: boolean;
   beers: BeerFilterResult[];
 }

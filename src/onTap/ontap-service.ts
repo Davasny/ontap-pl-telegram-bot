@@ -1,13 +1,10 @@
 import {
-  BeerFilterResult,
   BeerFilterResult2,
   BeerFilterResultSortBy,
-  BeerId,
   BeersFilters,
   BeerWithTaps,
   City,
   Pub,
-  PubWithTaps,
   Tap,
   TapParsed,
   TapWithPub,
@@ -17,353 +14,260 @@ import wretch, { Wretch } from "wretch";
 import { WretchLruMiddleware } from "../cache/wretch-lru-middleware";
 import "dotenv/config";
 import { getSimpleBeer } from "./get-simple-beer";
+import { getHalfLiterPrice } from "./get-half-liter-price";
+import { normalizeSearchText } from "./normalize-search-text";
+
+const summarizePub = (pub: Pub) => ({
+  id: pub.id,
+  name: pub.name,
+  address: pub.address,
+});
+const mapsUrl = (pub: Pub) =>
+  `https://www.google.com/maps/search/?${new URLSearchParams({
+    api: "1",
+    query: `${pub.lat},${pub.lon}`,
+  })}`;
 
 export class OntapService {
   private static instance: OntapService;
-
   private onTapApiClient: Wretch;
 
   constructor() {
     const onTapApiKey = process.env.ONTAP_API_KEY;
-    if (!onTapApiKey) {
-      throw new Error("ONTAP_API_KEY env variable not set");
-    }
+    if (!onTapApiKey) throw new Error("ONTAP_API_KEY env variable not set");
 
     this.onTapApiClient = wretch("https://ontap.pl/api/v1")
-      .headers({
-        "api-key": onTapApiKey,
-      })
-      .middlewares([
-        WretchLruMiddleware({
-          ttl: LRU_CACHE_TTL,
-          max: 1000,
-        }),
-      ]);
+      .headers({ "api-key": onTapApiKey })
+      .middlewares([WretchLruMiddleware({ ttl: LRU_CACHE_TTL, max: 1000 })]);
   }
 
   public static getInstance(): OntapService {
-    if (!OntapService.instance) {
-      OntapService.instance = new OntapService();
-    }
-
+    if (!OntapService.instance) OntapService.instance = new OntapService();
     return OntapService.instance;
   }
 
-  private static getHalfLiterPrice = (tap: TapParsed): number | null => {
-    const halfLiterVariant = tap.variants.find((v) => v.volume === "0.5l");
-    if (halfLiterVariant) {
-      return Math.round(halfLiterVariant.price / 100);
-    }
-
-    // if there is no 0.5l variant, try to calculate it from other variants
-    if (tap.variants.length > 0) {
-      const volume = tap.variants[0].volume;
-      // get number from volume string "0.5l" -> 0.5
-      const volumeNumber = parseFloat(
-        volume.replace(",", ".").replace("l", ""),
-      );
-      const price = tap.variants[0].price / 100;
-      // normalize price to 0.5l
-      return Math.round((0.5 * price) / volumeNumber);
-    }
-
-    return null;
-  };
-
   public static parseAbv = (abv: string | null | undefined): number | null => {
-    if (!abv) {
-      return null;
-    }
-
-    const abvNumber = parseFloat(
+    if (!abv) return null;
+    const value = parseFloat(
       abv.replace(",", ".").replace("%", "").replace("<", ""),
     );
-    if (isNaN(abvNumber)) {
-      return null;
-    }
-
-    return abvNumber;
-  };
-
-  private static getAlcoholWeight = (tap: TapParsed): number | null => {
-    const abv = tap.beer?.abv;
-    if (!abv) {
-      return null;
-    }
-
-    return Math.round((abv / 100) * 500 * ALCOHOL_DESTINY_G_ML);
+    return Number.isFinite(value) ? value : null;
   };
 
   public async getCities(): Promise<City[]> {
-    return await this.onTapApiClient.url("/cities").get().json<City[]>();
+    return this.onTapApiClient.url("/cities").get().json<City[]>();
   }
 
   public async getCitiesNames(): Promise<string[]> {
-    return await this.onTapApiClient
-      .url("/cities")
-      .get()
-      .json<City[]>()
-      .then((cities) => cities.map((city) => city.name));
+    return (await this.getCities()).map((city) => city.name);
   }
 
   private async getPubsInCity(cityName: string): Promise<Pub[]> {
-    const city = await this.getCities().then((cities) =>
-      cities.find((city) => city.name === cityName),
+    const cities = await this.getCities();
+    const city = cities.find(
+      (item) =>
+        normalizeSearchText(item.name) === normalizeSearchText(cityName),
     );
-
-    if (!city) {
-      throw new Error(`City ${cityName} not found`);
-    }
-
-    return await this.onTapApiClient
+    if (!city) throw new Error(`City ${cityName} not found`);
+    return this.onTapApiClient
       .url(`/cities/${city.id}/pubs`)
       .get()
       .json<Pub[]>();
   }
 
-  public async getPubNamesInCity(cityName: string): Promise<string[]> {
-    const pubs = await this.getPubsInCity(cityName);
-
-    return pubs.map((pub) => pub.name);
+  public async findPubs(cityName: string, query: string) {
+    const tokens = normalizeSearchText(query).split(/\s+/).filter(Boolean);
+    const pubs = (await this.getPubsInCity(cityName))
+      .filter((pub) => {
+        const text = normalizeSearchText(`${pub.name} ${pub.address}`);
+        return tokens.every((token) => text.includes(token));
+      })
+      .map(summarizePub);
+    return { status: pubs.length ? "ok" : "pub_not_found", pubs };
   }
 
-  public async getPubDetails(
-    cityName: string,
-    pubName: string,
-  ): Promise<PubWithTaps> {
-    const pub = await this.getPubsInCity(cityName).then((pubs) =>
-      pubs.find((pub) => pub.name === pubName),
-    );
-
-    if (!pub) {
-      throw new Error(`Pub "${pubName}" not found`);
-    }
-
-    const beers = await this.getBeers(
-      {
-        cityName: cityName,
-        pubNameRegex: pub.name.toLowerCase(),
-        limitBeers: 100,
-      },
-      "priceAsc",
-    );
-
+  public async getPubDetails(cityName: string, pubId: string) {
+    const pubs = await this.getPubsInCity(cityName);
+    const pub = pubs.find((item) => item.id === pubId);
+    if (!pub) return { status: "pub_not_found", pub: null };
     return {
-      ...pub,
-      beers: beers.beers,
+      status: "ok",
+      pub: {
+        ...summarizePub(pub),
+        city: pub.city,
+        url: pub.url,
+        mapsUrl: mapsUrl(pub),
+        activeTaps: pub.active_taps_count,
+      },
     };
   }
 
-  public async getPubByName(cityName: string, pubName: string): Promise<Pub> {
-    const pub = await this.getPubsInCity(cityName).then((pubs) =>
-      pubs.find((pub) => pub.name === pubName),
-    );
-
-    if (!pub) {
-      throw new Error(`Pub ${pubName} not found`);
-    }
-
-    return pub;
-  }
-
   public async getTapsInPub(pubId: string): Promise<TapParsed[]> {
-    // parse abv to number
-    return await this.onTapApiClient
+    const taps = await this.onTapApiClient
       .url(`/pubs/${pubId}/taps`)
       .get()
-      .json<Tap[]>()
-      .then((taps) =>
-        taps.map((tap) => ({
-          ...tap,
-          beer: tap.beer
-            ? {
-                ...tap.beer,
-                abv: OntapService.parseAbv(tap.beer.abv),
-              }
-            : tap.beer,
-        })),
-      );
+      .json<Tap[]>();
+    return taps.map((tap) => ({
+      ...tap,
+      beer: tap.beer
+        ? { ...tap.beer, abv: OntapService.parseAbv(tap.beer.abv) }
+        : null,
+    }));
   }
 
-  public getGoogleMapsUrl = async (
+  public async getPubBeers(
     cityName: string,
-    pubName: string,
-  ): Promise<string> => {
-    const pub = await this.getPubByName(cityName, pubName);
-    const urlParams = new URLSearchParams({
-      api: "1",
-      query: `${pub.lat},${pub.lon}`,
-    });
-
-    return `https://www.google.com/maps/search/?${urlParams.toString()}`;
-  };
+    pubId: string,
+    filter: Omit<BeersFilters, "cityName" | "limitBeers" | "pubId">,
+    sort: BeerFilterResultSortBy,
+    limitBeers: number,
+  ): Promise<BeerFilterResult2> {
+    return this.getBeers({ ...filter, cityName, pubId, limitBeers }, sort);
+  }
 
   public getBeers = async (
     filter: BeersFilters,
     sort: BeerFilterResultSortBy,
   ): Promise<BeerFilterResult2> => {
+    if (
+      !Number.isInteger(filter.limitBeers) ||
+      filter.limitBeers < 1 ||
+      filter.limitBeers > 100
+    ) {
+      throw new Error("limitBeers must be an integer between 1 and 100");
+    }
+    if (
+      filter.priceFrom !== undefined &&
+      filter.priceTo !== undefined &&
+      filter.priceFrom > filter.priceTo
+    ) {
+      throw new Error("priceFrom cannot exceed priceTo");
+    }
+    if (
+      filter.abvFrom !== undefined &&
+      filter.abvTo !== undefined &&
+      filter.abvFrom > filter.abvTo
+    ) {
+      throw new Error("abvFrom cannot exceed abvTo");
+    }
+
+    const styleRegex = filter.lowerCaseStyleRegex
+      ? new RegExp(filter.lowerCaseStyleRegex, "i")
+      : null;
+    const nameRegex = filter.lowerCaseBeerNameRegex
+      ? new RegExp(filter.lowerCaseBeerNameRegex, "i")
+      : null;
     const pubsInCity = await this.getPubsInCity(filter.cityName);
-
-    const pubsWithTapsInCity = (
-      await Promise.all(
-        pubsInCity.map((pub) =>
-          this.getTapsInPub(pub.id).then((taps) => ({ pub: pub, taps: taps })),
-        ),
-      )
-    ).flat();
-
-    const beersInCityMap = new Map<BeerId, BeerWithTaps>();
-
-    const filteredPubsByName = pubsWithTapsInCity.filter(
-      (pub) =>
-        !filter.pubNameRegex ||
-        new RegExp(filter.pubNameRegex.toLowerCase()).test(
-          pub.pub.name.toLowerCase(),
-        ),
+    const selectedPubs = pubsInCity.filter(
+      (pub) => !filter.pubId || pub.id === filter.pubId,
     );
+    const pubsWithTaps = await Promise.all(
+      selectedPubs.map(async (pub) => ({
+        pub,
+        taps: await this.getTapsInPub(pub.id),
+      })),
+    );
+    const beerMap = new Map<string, BeerWithTaps>();
+    let activeTaps = 0;
 
-    for (const pubWithTaps of filteredPubsByName) {
-      for (const tap of pubWithTaps.taps) {
-        const halfLiterPrice = OntapService.getHalfLiterPrice(tap);
-        const halfLiterAlcoholWeight = OntapService.getAlcoholWeight(tap);
-        const alcoholToPriceRatio =
-          halfLiterAlcoholWeight && halfLiterPrice
-            ? halfLiterAlcoholWeight / halfLiterPrice
-            : null;
+    for (const { pub, taps } of pubsWithTaps) {
+      for (const tap of taps) {
+        if (!tap.beer) continue;
+        activeTaps++;
+        const beer = tap.beer;
+        if (styleRegex && !styleRegex.test(beer.style || "")) continue;
+        if (nameRegex && !nameRegex.test(beer.name)) continue;
+        if (
+          filter.abvFrom !== undefined &&
+          (beer.abv === null || beer.abv < filter.abvFrom)
+        )
+          continue;
+        if (
+          filter.abvTo !== undefined &&
+          (beer.abv === null || beer.abv > filter.abvTo)
+        )
+          continue;
 
+        const halfLiterPrice = getHalfLiterPrice(tap);
+        if (
+          filter.priceFrom !== undefined &&
+          (halfLiterPrice === null || halfLiterPrice < filter.priceFrom)
+        )
+          continue;
+        if (
+          filter.priceTo !== undefined &&
+          (halfLiterPrice === null || halfLiterPrice > filter.priceTo)
+        )
+          continue;
+
+        const halfLiterAlcoholWeight =
+          beer.abv === null
+            ? null
+            : (beer.abv / 100) * 500 * ALCOHOL_DESTINY_G_ML;
         const tapWithPub: TapWithPub = {
           ...tap,
-          pub: pubWithTaps.pub,
+          pub,
           halfLiterPrice,
           halfLiterAlcoholWeight,
-          alcoholToPriceRatio,
+          alcoholToPriceRatio:
+            halfLiterPrice !== null &&
+            halfLiterPrice > 0 &&
+            halfLiterAlcoholWeight !== null
+              ? halfLiterAlcoholWeight / halfLiterPrice
+              : null,
         };
-
-        if (tap.beer) {
-          const beer = beersInCityMap.get(tap.beer.id);
-          if (beer) {
-            beer.taps.push(tapWithPub);
-          } else {
-            const beerWithTaps: BeerWithTaps = {
-              ...tap.beer,
-              taps: [tapWithPub],
-            };
-
-            beersInCityMap.set(tap.beer.id, beerWithTaps);
-          }
-        }
+        const existing = beerMap.get(beer.id);
+        if (existing) existing.taps.push(tapWithPub);
+        else beerMap.set(beer.id, { ...beer, taps: [tapWithPub] });
       }
     }
 
-    const beers: BeerWithTaps[] = Array.from(beersInCityMap.values());
-
-    const filterByStyleRegex = (beer: BeerWithTaps): boolean =>
-      !filter.lowerCaseStyleRegex ||
-      (beer.style
-        ? new RegExp(filter.lowerCaseStyleRegex.toLowerCase()).test(
-            beer.style.toLowerCase(),
-          )
-        : false);
-
-    const filterByBeerNameRegex = (beer: BeerWithTaps): boolean =>
-      !filter.lowerCaseBeerNameRegex ||
-      (beer.name
-        ? new RegExp(filter.lowerCaseBeerNameRegex.toLowerCase()).test(
-            beer.name.toLowerCase(),
-          )
-        : false);
-
-    const filterByLowerPrice = (beer: BeerWithTaps): boolean =>
-      filter.priceFrom === undefined ||
-      (filter.priceFrom
-        ? beer.taps.some((tap) =>
-            tap.halfLiterPrice
-              ? tap.halfLiterPrice >=
-                (filter.priceFrom ? filter.priceFrom : 9999)
-              : false,
-          )
-        : false);
-
-    const filterByHigherPrice = (beer: BeerWithTaps): boolean =>
-      filter.priceTo === undefined ||
-      (filter.priceTo
-        ? beer.taps.some((tap) =>
-            tap.halfLiterPrice
-              ? tap.halfLiterPrice <= (filter.priceTo ? filter.priceTo : 0)
-              : false,
-          )
-        : false);
-
-    const filterByLowerAbv = (beer: BeerWithTaps): boolean =>
-      filter.abvFrom === undefined ||
-      (beer.abv !== null ? beer.abv >= filter.abvFrom : false);
-
-    const filterByHigherAbv = (beer: BeerWithTaps): boolean =>
-      filter.abvTo === undefined ||
-      (beer.abv !== null ? beer.abv <= filter.abvTo : false);
-
-    const filteredBeers = beers
-      .filter(filterByStyleRegex)
-      .filter(filterByLowerPrice)
-      .filter(filterByHigherPrice)
-      .filter(filterByLowerAbv)
-      .filter(filterByHigherAbv)
-      .filter(filterByBeerNameRegex);
-
-    let sortedBeers = [];
-    switch (sort) {
-      case "alcoholAbvAsc":
-        sortedBeers = filteredBeers.sort(
-          (a, b) => (a.abv && b.abv && a.abv - b.abv) || 0,
-        );
-        break;
-      case "alcoholAbvDesc":
-        sortedBeers = filteredBeers.sort(
-          (a, b) => (b.abv && a.abv && b.abv - a.abv) || 0,
-        );
-        break;
-      case "alcoholToPriceRatioAsc":
-        sortedBeers = filteredBeers.sort(
-          (a, b) =>
-            (a.taps[0].alcoholToPriceRatio &&
-              b.taps[0].alcoholToPriceRatio &&
-              a.taps[0].alcoholToPriceRatio - b.taps[0].alcoholToPriceRatio) ||
-            0,
-        );
-        break;
-      case "alcoholToPriceRatioDesc":
-        sortedBeers = filteredBeers.sort(
-          (a, b) =>
-            (b.taps[0].alcoholToPriceRatio &&
-              a.taps[0].alcoholToPriceRatio &&
-              b.taps[0].alcoholToPriceRatio - a.taps[0].alcoholToPriceRatio) ||
-            0,
-        );
-        break;
-      case "priceAsc":
-        sortedBeers = filteredBeers.sort(
-          (a, b) =>
-            (a.taps[0].halfLiterPrice &&
-              b.taps[0].halfLiterPrice &&
-              a.taps[0].halfLiterPrice - b.taps[0].halfLiterPrice) ||
-            0,
-        );
-        break;
-      case "priceDesc":
-        sortedBeers = filteredBeers.sort(
-          (a, b) =>
-            (b.taps[0].halfLiterPrice &&
-              a.taps[0].halfLiterPrice &&
-              b.taps[0].halfLiterPrice - a.taps[0].halfLiterPrice) ||
-            0,
-        );
-        break;
-    }
-
-    const simplifiedBeers: BeerFilterResult[] = sortedBeers.map(getSimpleBeer);
+    const metric = (beer: BeerWithTaps): number | null => {
+      if (sort === "alcoholAbvAsc" || sort === "alcoholAbvDesc")
+        return beer.abv;
+      const values = beer.taps.flatMap((tap) => {
+        const value =
+          sort === "priceAsc" || sort === "priceDesc"
+            ? tap.halfLiterPrice
+            : tap.alcoholToPriceRatio;
+        return value === null ? [] : [value];
+      });
+      if (!values.length) return null;
+      return sort === "alcoholToPriceRatioAsc" ||
+        sort === "alcoholToPriceRatioDesc"
+        ? Math.max(...values)
+        : Math.min(...values);
+    };
+    const descending = sort.endsWith("Desc");
+    const beers = Array.from(beerMap.values()).sort((a, b) => {
+      const left = metric(a);
+      const right = metric(b);
+      if (left === null) return right === null ? 0 : 1;
+      if (right === null) return -1;
+      return descending ? right - left : left - right;
+    });
+    const results = beers.slice(0, filter.limitBeers).map(getSimpleBeer);
+    const resultPubIds = new Set(
+      results.flatMap((beer) => beer.pubs.map((pub) => pub.pubId)),
+    );
 
     return {
-      beers: simplifiedBeers.slice(0, filter.limitBeers),
+      status: !selectedPubs.length
+        ? "pub_not_found"
+        : !activeTaps
+          ? "no_active_taps"
+          : !beers.length
+            ? "no_matching_beers"
+            : "ok",
+      currency: "PLN",
+      priceBasis: "normalized_0.5l",
+      pubs: selectedPubs
+        .filter((pub) => !results.length || resultPubIds.has(pub.id))
+        .map(summarizePub),
+      total: beers.length,
+      returned: results.length,
+      truncated: beers.length > results.length,
+      beers: results,
     };
   };
 }
