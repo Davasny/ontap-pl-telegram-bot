@@ -64,6 +64,8 @@ describe("Agent Responses API", () => {
     expect(mocks.createResponse).toHaveBeenLastCalledWith(
       expect.objectContaining({
         conversation: "conv_test",
+        model: "gpt-6-luna",
+        reasoning: { effort: "none" },
         store: true,
         stream: true,
         input: [{ role: "user", content: "Again" }],

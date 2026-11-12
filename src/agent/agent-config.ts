@@ -2,9 +2,10 @@ import { ResponseCreateParamsBase } from "openai/resources/responses/responses";
 
 export const agentConfig: Pick<
   ResponseCreateParamsBase,
-  "model" | "instructions" | "tools"
+  "model" | "reasoning" | "instructions" | "tools"
 > = {
-  model: "gpt-4o-mini",
+  model: "gpt-6-luna",
+  reasoning: { effort: "none" },
   instructions: `
 You are an assistant helping users find information about pubs and beers in city.
 Your goal is to meet the following requirements:
