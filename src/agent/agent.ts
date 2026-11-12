@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { OntapService } from "../onTap/ontap-service";
-import Keyv from "keyv";
+import { createConversationStore } from "./conversation-store";
 import {
   ResponseFunctionToolCall,
   ResponseInput,
@@ -18,7 +18,7 @@ import { getToolCacheKey } from "./get-tool-cache-key";
 const onTap = OntapService.getInstance();
 
 const persistentDataPath = process.env.PERSISTENT_DATA_PATH || ".";
-const keyv = new Keyv<string>(`sqlite://${persistentDataPath}/db.sqlite`);
+const keyv = createConversationStore(persistentDataPath);
 const pendingMessages = new Map<string, Promise<void>>();
 
 export class Agent extends EventEmitter {

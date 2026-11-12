@@ -14,23 +14,23 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@keyv/sqlite": "3.6.7",
+    "@keyv/sqlite": "6.1.0",
     "@types/crypto-js": "4.2.2",
-    "@types/node": "20.14.11",
+    "@types/node": "26.6.6",
     "crypto-js": "4.2.0",
-    "dotenv": "16.4.5",
-    "grammy": "1.27.0",
-    "keyv": "4.5.4",
-    "lru-cache": "11.0.0",
+    "dotenv": "18.0.10",
+    "grammy": "1.46.0",
+    "keyv": "6.1.0",
+    "lru-cache": "11.5.3",
     "openai": "7.56.0",
-    "pino": "9.3.1",
-    "pino-pretty": "11.2.1",
-    "pm2": "5.4.2",
-    "prettier": "3.3.3",
-    "tsx": "4.16.2",
-    "typescript": "5.5.3",
-    "vitest": "2.0.4",
-    "wretch": "2.9.0"
+    "pino": "10.4.0",
+    "pino-pretty": "13.2.0",
+    "pm2": "7.1.2",
+    "prettier": "3.10.0",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0",
+    "wretch": "3.0.9"
   },
-  "packageManager": "pnpm@12.8.0"
+  "packageManager": "pnpm@12.18.0"
 }
