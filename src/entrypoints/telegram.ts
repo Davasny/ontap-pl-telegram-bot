@@ -3,7 +3,6 @@ import { Agent } from "../agent/agent";
 import { debounce } from "../utils/debounce";
 import { logger } from "../logger";
 import { WELCOME_MESSAGE } from "../consts";
-import { IUserMessagePayload } from "../types/events";
 
 interface IHandleMessageArgs {
   chatId: number;
@@ -50,20 +49,25 @@ const handleMessage = async (props: IHandleMessageArgs) => {
     50,
   );
 
-  let lassMessage = "";
+  let lastMessage = "";
   agent.on("assistantMessage", async ({ snapshot }) => {
     const newMessage = snapshot.value;
-    if (lassMessage !== newMessage) {
-      lassMessage = snapshot;
+    if (lastMessage !== newMessage) {
+      lastMessage = newMessage;
       await debouncedEditMessageText(chatId, message.message_id, newMessage);
     }
   });
 
-  const payload: IUserMessagePayload = {
-    message: props.message,
-  };
-
-  agent.emit("userMessage", payload);
+  try {
+    await agent.sendMessage(props.message);
+  } catch (error) {
+    childLogger.error({ err: error }, "Failed to process message");
+    await debouncedEditMessageText(
+      chatId,
+      message.message_id,
+      "Wybacz, nie udało się przygotować odpowiedzi. Spróbuj ponownie.",
+    );
+  }
 };
 
 const main = async () => {

@@ -3,14 +3,13 @@ import { OntapService } from "../onTap/ontap-service";
 import Keyv from "keyv";
 import { BeerFilterResultSortBy, BeersFilters } from "../types/types";
 import {
-  RequiredActionFunctionToolCall,
-  RunSubmitToolOutputsParams,
-} from "openai/src/resources/beta/threads/runs/runs";
-import { generateHash } from "../utils/generate-hash";
+  ResponseFunctionToolCall,
+  ResponseInput,
+  ResponseInputItem,
+} from "openai/resources/responses/responses";
 import "dotenv/config";
 import { EventEmitter } from "events";
-import { AssistantStream } from "openai/lib/AssistantStream";
-import { assistantConfig } from "./agent-config";
+import { agentConfig } from "./agent-config";
 import type Pino from "pino";
 import { IUserMessagePayload } from "../types/events";
 
@@ -19,7 +18,8 @@ import { formatBeersToCsv } from "./format-beers-to-csv";
 const onTap = OntapService.getInstance();
 
 const persistentDataPath = process.env.PERSISTENT_DATA_PATH || ".";
-const keyv = new Keyv(`sqlite://${persistentDataPath}/db.sqlite`);
+const keyv = new Keyv<string>(`sqlite://${persistentDataPath}/db.sqlite`);
+const pendingMessages = new Map<string, Promise<void>>();
 
 export class Agent extends EventEmitter {
   private openai: OpenAI;
@@ -37,88 +37,50 @@ export class Agent extends EventEmitter {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    this.on("userMessage", (payload: IUserMessagePayload) =>
-      this.processMessage(payload.message),
-    );
-  }
-
-  private async getThreadId(userId: string): Promise<string> {
-    const assistantId = await this.getAssistantId();
-    const keyvThreadKey = `threadId-${assistantId}-${userId}`;
-    let threadId = await keyv.get(keyvThreadKey);
-
-    if (!threadId) {
-      threadId = await this.openai.beta.threads
-        .create()
-        .then((thread) => thread.id);
-
-      await keyv.set(keyvThreadKey, threadId);
-
-      this.logger.info({
-        msg: `system: created new thread ${threadId}`,
-        threadId,
-        keyvThreadKey,
+    this.on("userMessage", (payload: IUserMessagePayload) => {
+      void this.sendMessage(payload.message).catch((error: unknown) => {
+        this.logger.error({ err: error }, "Failed to process message");
+        this.emit("assistantError", error);
       });
-    }
-
-    return threadId;
-  }
-
-  private async getAssistantId(): Promise<string> {
-    const assistantVersion = generateHash(JSON.stringify(assistantConfig));
-
-    let assistantId = await keyv.get(`assistantId-${assistantVersion}`);
-
-    await this.openai.beta.assistants.retrieve(assistantId).catch(async () => {
-      this.logger.info({
-        msg: "Assistant not found, deleting from kv and creating new one",
-      });
-
-      await keyv.delete(`assistantId-${assistantVersion}`);
-      assistantId = undefined;
     });
+  }
 
-    if (!assistantId) {
-      this.logger.info({
-        msg: `system: Creating new assistant`,
-        assistantVersion,
-      });
+  public async sendMessage(message: string): Promise<void> {
+    const previous = pendingMessages.get(this.userId) || Promise.resolve();
+    const pending = previous
+      .catch(() => {})
+      .then(() => this.processMessage(message));
+    pendingMessages.set(this.userId, pending);
 
-      const date = new Date();
-
-      const assistant = await this.openai.beta.assistants.create({
-        ...assistantConfig,
-        name: `${
-          assistantConfig.name
-        } - ${date.toISOString()} - ${assistantVersion}`,
-      });
-
-      assistantId = assistant.id;
-      await keyv.set(`assistantId-${assistantVersion}`, assistantId);
+    try {
+      await pending;
+    } finally {
+      if (pendingMessages.get(this.userId) === pending) {
+        pendingMessages.delete(this.userId);
+      }
     }
+  }
 
-    return assistantId;
+  private async getConversationId(): Promise<string> {
+    const key = `conversationId-${this.userId}`;
+    const conversationId = await keyv.get(key);
+    if (conversationId) return conversationId;
+
+    const conversation = await this.openai.conversations.create();
+    await keyv.set(key, conversation.id);
+    this.logger.info(
+      { conversationId: conversation.id },
+      "Created conversation",
+    );
+
+    return conversation.id;
   }
 
   private handleFunctionCall = async (
-    toolCall: RequiredActionFunctionToolCall,
-  ): Promise<RunSubmitToolOutputsParams.ToolOutput> => {
-    if (!toolCall.function) {
-      return {
-        tool_call_id: toolCall.id,
-        output: "Unknown function",
-      };
-    }
-
-    const functionName = toolCall.function?.name;
-    if (!functionName) {
-      return {
-        tool_call_id: toolCall.id,
-        output: "Unknown function",
-      };
-    }
-
-    const functionArgs = toolCall.function.arguments || "{}";
+    toolCall: ResponseFunctionToolCall,
+  ): Promise<ResponseInputItem.FunctionCallOutput> => {
+    const functionName = toolCall.name;
+    const functionArgs = toolCall.arguments || "{}";
 
     this.logger.info({
       msg: `assistant: functionCall ${functionName}`,
@@ -201,118 +163,75 @@ export class Agent extends EventEmitter {
     });
 
     return {
-      tool_call_id: toolCall.id,
+      type: "function_call_output",
+      call_id: toolCall.call_id,
       output: Array.isArray(functionResult)
         ? functionResult.join(", ")
         : functionResult,
     };
   };
 
-  private observeStream(oaiStream: AssistantStream, threadId: string) {
+  private async processMessage(message: string) {
+    const conversation = await this.getConversationId();
+    let input: ResponseInput = [{ role: "user", content: message }];
     let fullMsgText = "";
-    let start = Date.now();
 
-    oaiStream.on("textDelta", (delta, snapshot) => {
-      fullMsgText += delta.value;
-      this.emit("assistantMessage", { delta: delta.value, snapshot });
-    });
-
-    oaiStream.on("textDone", () => {
-      this.logger.info({
-        msg: `assistant: ${fullMsgText.length > 100 ? fullMsgText.slice(0, 100) + "..." : fullMsgText}`,
-        response: fullMsgText,
-        duration: Date.now() - start,
-        type: "textDone",
+    while (true) {
+      const stream = await this.openai.responses.create({
+        ...agentConfig,
+        conversation,
+        input,
+        store: true,
+        stream: true,
       });
-    });
+      const toolCalls: ResponseFunctionToolCall[] = [];
+      let completed = false;
 
-    oaiStream.on("toolCallCreated", (e) => {
-      if (e.type === "function") {
-        const funcName = e.function.name;
-
-        this.logger.info({
-          msg: `assistant: toolCallCreated ${funcName}`,
-          function: funcName,
-          type: "toolCallCreated",
-        });
-
-        this.emit("assistantToolCreated", `Function call: ${funcName}`);
+      for await (const event of stream) {
+        if (event.type === "response.output_text.delta") {
+          fullMsgText += event.delta;
+          this.emit("assistantMessage", {
+            delta: event.delta,
+            snapshot: { value: fullMsgText },
+          });
+        } else if (
+          event.type === "response.output_item.added" &&
+          event.item.type === "function_call"
+        ) {
+          this.emit(
+            "assistantToolCreated",
+            `Function call: ${event.item.name}`,
+          );
+        } else if (
+          event.type === "response.output_item.done" &&
+          event.item.type === "function_call"
+        ) {
+          toolCalls.push(event.item);
+        } else if (event.type === "response.completed") {
+          completed = true;
+        } else if (
+          event.type === "response.failed" ||
+          event.type === "response.incomplete"
+        ) {
+          throw new Error(
+            event.response.error?.message ||
+              `Response ${event.response.status}`,
+          );
+        } else if (event.type === "error") {
+          throw new Error(event.message);
+        }
       }
-    });
 
-    oaiStream.on("messageDone", () => {
-      this.logger.info({ msg: "assistant: messageDone", type: "messageDone" });
-      this.emit("assistantMessageDone");
-    });
+      if (!completed)
+        throw new Error("Response stream ended before completion");
 
-    oaiStream.on("end", async () => {
-      // check if there are any tool calls to respond to
-      const currentRun = oaiStream.currentRun();
-      if (
-        !currentRun ||
-        currentRun.status !== "requires_action" ||
-        !currentRun.required_action
-      ) {
-        this.logger.info({
-          msg: `system: streamEnd`,
-          status: currentRun?.status,
-          type: "streamEnd",
-        });
+      if (toolCalls.length === 0) {
+        this.emit("assistantMessageDone");
+        this.emit("assistantMessageEnd");
         return;
       }
 
-      const tool_outputs = await Promise.all(
-        currentRun.required_action?.submit_tool_outputs?.tool_calls?.map((t) =>
-          this.handleFunctionCall(t),
-        ),
-      );
-
-      this.logger.info({
-        msg: "system: submitToolOutputs",
-        tool_outputs: JSON.stringify(tool_outputs),
-        type: "submitToolOutputs",
-      });
-
-      const newStream = this.openai.beta.threads.runs.submitToolOutputsStream(
-        threadId,
-        currentRun.id,
-        { tool_outputs },
-      );
-
-      this.observeStream(newStream, threadId);
-    });
-  }
-
-  private async processMessage(message: string) {
-    const assistantId = await this.getAssistantId();
-    const threadId = await this.getThreadId(this.userId);
-
-    const activeRuns = await this.openai.beta.threads.runs.list(threadId);
-    for await (const run of activeRuns) {
-      if (run.status === "in_progress" || run.status === "requires_action") {
-        this.logger.warn({
-          msg: `system: Cancelling orphaned run: ${run.id}`,
-          type: "cancelRun",
-        });
-        await this.openai.beta.threads.runs.cancel(threadId, run.id);
-      }
+      input = await Promise.all(toolCalls.map(this.handleFunctionCall));
     }
-
-    this.logger.info({
-      msg: `user: ${message}`,
-      content: message,
-      type: "newMessage",
-    });
-
-    await this.openai.beta.threads.messages.create(threadId, {
-      role: "user",
-      content: message,
-    });
-
-    const oaiStream = this.openai.beta.threads.runs.stream(threadId, {
-      assistant_id: assistantId,
-    });
-
-    this.observeStream(oaiStream, threadId);
   }
 }

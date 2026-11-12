@@ -2,7 +2,6 @@ import * as readline from "readline";
 import { Agent } from "../agent/agent";
 import { WELCOME_MESSAGE } from "../consts";
 import { logger } from "../logger";
-import { IUserMessagePayload } from "../types/events";
 
 const main = async () => {
   const userId = "cli";
@@ -27,11 +26,7 @@ const main = async () => {
     }
 
     try {
-      const payload: IUserMessagePayload = {
-        message: line,
-      };
-
-      agent.emit("userMessage", payload);
+      await agent.sendMessage(line);
     } catch (error) {
       logger.error(`Error processing message: ${error}`);
     }
