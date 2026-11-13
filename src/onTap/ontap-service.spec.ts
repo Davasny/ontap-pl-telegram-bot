@@ -1,6 +1,5 @@
-import { assert, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { OntapService } from "./ontap-service";
-import exp from "constants";
 
 describe("OntapService.parseAbv", () => {
   const cases: { input: string | null; expected: number | null }[] = [
@@ -20,7 +19,7 @@ describe("OntapService.parseAbv", () => {
   });
 });
 
-describe("Check ontap api", async () => {
+describe("Check ontap api", () => {
   it("returns cities", async () => {
     const onTap = new OntapService();
     const cities = await onTap.getCities();
