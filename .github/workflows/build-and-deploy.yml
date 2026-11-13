@@ -24,6 +24,8 @@ jobs:
         with:
           context: ./
           push: true
+          secrets: |
+            "ONTAP_API_KEY=${{ secrets.ONTAP_API_KEY }}"
           tags: |
             ${{ vars.DOCKERHUB_REPOSITORY }}:ontap-bot-${{ github.sha }}
 
