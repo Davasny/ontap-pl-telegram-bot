@@ -31,41 +31,75 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs:
       - build
+    env:
+      NOMAD_ADDR: http://127.0.0.1:4646
     steps:
       - name: Checkout to the branch
         uses: actions/checkout@v4
 
       - name: Set up nomad cli
         run: |
-          curl https://releases.hashicorp.com/nomad/1.7.2/nomad_1.7.2_linux_amd64.zip -o nomad.zip
+          curl --fail --show-error --silent --location --retry 3 https://releases.hashicorp.com/nomad/2.0.4/nomad_2.0.4_linux_amd64.zip -o nomad.zip
           unzip nomad.zip
           chmod +x nomad
-          sudo mv nomad /bin/nomad
 
       - name: Setup cloudflared
         run: |
-          curl -L https://github.com/cloudflare/cloudflared/releases/download/2023.10.0/cloudflared-linux-amd64.deb -o cloudflared.deb
-          sudo dpkg -i cloudflared.deb
+          curl --fail --show-error --silent --location --retry 3 https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
 
       - name: Spawn cloudflared tunnel
         env:
           TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.TUNNEL_SERVICE_TOKEN_ID }}
           TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.TUNNEL_SERVICE_TOKEN_SECRET }}
-        run: sudo -E nohup cloudflared access tcp --hostname nomad-tcp.justdockerize.it --url localhost:4646 &
+          NOMAD_CF_HOSTNAME: ${{ vars.NOMAD_CF_HOSTNAME || 'nomad-tcp.justdockerize.it' }}
+        run: |
+          nohup ./cloudflared access tcp --hostname "$NOMAD_CF_HOSTNAME" --url 127.0.0.1:4646 > cloudflared.nohup.log 2>&1 &
+          echo $! > cloudflared.pid
+
+      - name: Wait for Nomad tunnel
+        run: |
+          for attempt in {1..30}; do
+            if ! kill -0 "$(cat cloudflared.pid)" 2>/dev/null; then
+              echo "Cloudflared exited before the tunnel became ready"
+              exit 1
+            fi
+            echo "Waiting for Nomad tunnel (attempt ${attempt}/30)"
+            if curl --silent --show-error --fail --connect-timeout 2 --max-time 5 "${NOMAD_ADDR}/v1/status/leader" >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Nomad tunnel did not become ready"
+          exit 1
 
       - name: Deploy to nomad
+        timeout-minutes: 5
         env:
           NOMAD_TOKEN: ${{ secrets.NOMAD_TOKEN }}
+          NOMAD_VAR_docker_user: ${{ secrets.DOCKERHUB_USERNAME }}
+          NOMAD_VAR_docker_password: ${{ secrets.DOCKERHUB_TOKEN }}
+          NOMAD_VAR_dockerhub_repository: ${{ vars.DOCKERHUB_REPOSITORY }}
+          NOMAD_VAR_image_tag: ontap-bot-${{ github.sha }}
+          NOMAD_VAR_ontap_api_key: ${{ secrets.ONTAP_API_KEY }}
+          NOMAD_VAR_telegram_bot_token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          NOMAD_VAR_openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          NOMAD_VAR_hyperdx_api_key: ${{ secrets.HYPERDX_API_KEY }}
+        run: ./nomad job run ./ci/ontap-bot.nomad
+
+      - name: Stop cloudflared tunnel
+        if: always()
         run: |
-          nomad job run \
-            -var docker_user=${{ secrets.DOCKERHUB_USERNAME }} \
-            -var docker_password=${{ secrets.DOCKERHUB_TOKEN }} \
-            -var dockerhub_repository=${{ vars.DOCKERHUB_REPOSITORY }} \
-            -var image_tag=ontap-bot-${{ github.sha }} \
-            -var ontap_api_key=${{ secrets.ONTAP_API_KEY }} \
-            -var telegram_bot_token=${{ secrets.TELEGRAM_BOT_TOKEN }} \
-            -var openai_api_key=${{ secrets.OPENAI_API_KEY }} \
-            -var hyperdx_api_key=${{ secrets.HYPERDX_API_KEY }} \
-            ./ci/ontap-bot.nomad
+          if [ -f cloudflared.pid ]; then
+            kill "$(cat cloudflared.pid)" || true
+          fi
+
+      - name: Print cloudflared log on failure
+        if: failure()
+        run: |
+          if [ -f cloudflared.nohup.log ]; then
+            cat cloudflared.nohup.log
+          fi
